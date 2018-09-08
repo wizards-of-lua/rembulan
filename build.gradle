@@ -2,7 +2,7 @@ allprojects  {
   apply plugin: 'maven'
   apply plugin: 'eclipse'
   group = 'net.sandius.rembulan'
-  version = '0.1-SNAPSHOT'
+  version = '0.2-SNAPSHOT'
 }
 
 subprojects {
@@ -12,10 +12,20 @@ subprojects {
   targetCompatibility = 1.8
 
 
+
   repositories {
     mavenLocal()
 
     maven { url "http://repo.maven.apache.org/maven2" }
+  }
+  
+  task sourceJar(type: Jar) {
+    classifier = 'sources'
+    from sourceSets.main.allSource
+  }
+  
+  artifacts {
+    archives sourceJar
   }
 
 
