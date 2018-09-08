@@ -1,0 +1,7 @@
+
+description = 'Rembulan examples'
+dependencies {
+  compile project(':rembulan-parent:rembulan-runtime')
+  compile project(':rembulan-parent:rembulan-compiler')
+  compile project(':rembulan-parent:rembulan-stdlib')
+}

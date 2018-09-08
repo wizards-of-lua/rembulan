@@ -1,0 +1,16 @@
+rootProject.name = 'rembulan'
+include ':rembulan-parent:rembulan-runtime'
+include ':rembulan-parent:rembulan-compiler'
+include ':rembulan-parent:rembulan-stdlib'
+include ':rembulan-parent:rembulan-luajava-compat'
+include ':rembulan-parent:rembulan-tests'
+include ':rembulan-parent:rembulan-examples'
+include ':rembulan-parent:rembulan-standalone'
+
+project(':rembulan-parent:rembulan-runtime').projectDir = "$rootDir/rembulan-runtime" as File
+project(':rembulan-parent:rembulan-compiler').projectDir = "$rootDir/rembulan-compiler" as File
+project(':rembulan-parent:rembulan-stdlib').projectDir = "$rootDir/rembulan-stdlib" as File
+project(':rembulan-parent:rembulan-luajava-compat').projectDir = "$rootDir/rembulan-luajava-compat" as File
+project(':rembulan-parent:rembulan-tests').projectDir = "$rootDir/rembulan-tests" as File
+project(':rembulan-parent:rembulan-examples').projectDir = "$rootDir/rembulan-examples" as File
+project(':rembulan-parent:rembulan-standalone').projectDir = "$rootDir/rembulan-standalone" as File

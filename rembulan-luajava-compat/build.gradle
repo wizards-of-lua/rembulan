@@ -1,0 +1,6 @@
+
+description = 'Rembulan LuaJava compatibility library'
+dependencies {
+  compile project(':rembulan-parent:rembulan-runtime')
+  compile project(':rembulan-parent:rembulan-stdlib')
+}

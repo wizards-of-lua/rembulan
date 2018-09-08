@@ -1,1 +1,10 @@
 target
+**/.apt_generated
+**/.classpath
+**/.factorypath
+**/.gradle
+**/.project
+**/.settings
+**/bin
+**/build
+*.launch

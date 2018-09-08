@@ -1,0 +1,5 @@
+
+description = 'Rembulan Standard Library'
+dependencies {
+  compile project(':rembulan-parent:rembulan-runtime')
+}

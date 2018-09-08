@@ -1,0 +1,8 @@
+
+description = 'Rembulan Standalone'
+dependencies {
+  compile project(':rembulan-parent:rembulan-runtime')
+  compile project(':rembulan-parent:rembulan-compiler')
+  compile project(':rembulan-parent:rembulan-stdlib')
+    compile group: 'jline', name: 'jline', version:'2.14.2'
+}
