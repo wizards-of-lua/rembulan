@@ -131,5 +131,159 @@ public class IoLibTest extends TestBase {
     // Then:
     assertThat(actual[0]).isEqualTo("one\ntwo\nthree");
   }
+  
+  @Test
+  public void test_readFile3_with_one_digit() throws Exception {
+    // Given:
+    String content = "1";
+    Path path = createTempFile(content);
+    String program = loadResource("readFile3.lua");
+
+    // When:
+    Object[] actual = run(program, path.toString());
+    
+    // Then:
+    assertThat(actual[0]).isEqualTo(1L);
+  }
+  
+  @Test
+  public void test_readFile3_with_two_digits() throws Exception {
+    // Given:
+    String content = "12";
+    Path path = createTempFile(content);
+    String program = loadResource("readFile3.lua");
+
+    // When:
+    Object[] actual = run(program, path.toString());
+    
+    // Then:
+    assertThat(actual[0]).isEqualTo(12L);
+  }
+  
+  @Test
+  public void test_readFile3_with_two_digits_separated_by_space() throws Exception {
+    // Given:
+    String content = "8 2";
+    Path path = createTempFile(content);
+    String program = loadResource("readFile3.lua");
+
+    // When:
+    Object[] actual = run(program, path.toString());
+    
+    // Then:
+    assertThat(actual[0]).isEqualTo(10L);
+  }
+  
+  @Test
+  public void test_readFile3_with_two_numbers_separated_by_space() throws Exception {
+    // Given:
+    String content = "10 20";
+    Path path = createTempFile(content);
+    String program = loadResource("readFile3.lua");
+
+    // When:
+    Object[] actual = run(program, path.toString());
+    
+    // Then:
+    assertThat(actual[0]).isEqualTo(30L);
+  }
+  
+  @Test
+  public void test_readFile3_with_two_digits_separated_by_newline() throws Exception {
+    // Given:
+    String content = "8\n2";
+    Path path = createTempFile(content);
+    String program = loadResource("readFile3.lua");
+
+    // When:
+    Object[] actual = run(program, path.toString());
+    
+    // Then:
+    assertThat(actual[0]).isEqualTo(10L);
+  }
+  
+  @Test
+  public void test_readFile3_with_two_numbers_separated_by_newline() throws Exception {
+    // Given:
+    String content = "10\n20";
+    Path path = createTempFile(content);
+    String program = loadResource("readFile3.lua");
+
+    // When:
+    Object[] actual = run(program, path.toString());
+    
+    // Then:
+    assertThat(actual[0]).isEqualTo(30L);
+  }
+  
+  @Test
+  public void test_readFile3_with_three_numbers_separated_by_newline() throws Exception {
+    // Given:
+    String content = "11\n22\n33";
+    Path path = createTempFile(content);
+    String program = loadResource("readFile3.lua");
+
+    // When:
+    Object[] actual = run(program, path.toString());
+    
+    // Then:
+    assertThat(actual[0]).isEqualTo(66L);
+  }
+  
+  @Test
+  public void test_readFile3_with_five_numbers_separated_by_newline() throws Exception {
+    // Given:
+    String content = "1\n2\n3\n4\n5\n";
+    Path path = createTempFile(content);
+    String program = loadResource("readFile3.lua");
+
+    // When:
+    Object[] actual = run(program, path.toString());
+    
+    // Then:
+    assertThat(actual[0]).isEqualTo(15L);
+  }
+  
+  @Test
+  public void test_readFile3_with_one_decimal_number() throws Exception {
+    // Given:
+    String content = "1.1";
+    Path path = createTempFile(content);
+    String program = loadResource("readFile3.lua");
+
+    // When:
+    Object[] actual = run(program, path.toString());
+    
+    // Then:
+    assertThat(actual[0]).isEqualTo(1.1D);
+  }
+  
+  @Test
+  public void test_readFile3_with_two_decimal_numbers_seperated_by_space() throws Exception {
+    // Given:
+    String content = "1.1 2.1";
+    Path path = createTempFile(content);
+    String program = loadResource("readFile3.lua");
+
+    // When:
+    Object[] actual = run(program, path.toString());
+    
+    // Then:
+    assertThat(actual[0]).isEqualTo(3.2D);
+  }
+  
+  @Test
+  public void test_readFile3_with_two_decimal_numbers_seperated_by_newline() throws Exception {
+    // Given:
+    String content = "1.1\n2.1";
+    Path path = createTempFile(content);
+    String program = loadResource("readFile3.lua");
+
+    // When:
+    Object[] actual = run(program, path.toString());
+    
+    // Then:
+    assertThat(actual[0]).isEqualTo(3.2D);
+  }
 
 }

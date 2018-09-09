@@ -72,4 +72,9 @@ public class OutputStreamIoFile extends IoFile {
     throw new UnsupportedOperationException("Bad file descriptor");
   }
 
+  @Override
+  public Number readNumber() throws IOException {
+    throw new UnsupportedOperationException("Bad file descriptor");
+  }
+
 }

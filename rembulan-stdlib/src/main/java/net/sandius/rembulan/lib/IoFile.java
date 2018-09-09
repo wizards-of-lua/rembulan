@@ -43,6 +43,10 @@ public abstract class IoFile extends DefaultUserdata {
     return "file (0x" + Integer.toHexString(hashCode()) + ")";
   }
 
+  private NextLine nextLine = new NextLine();
+
+  private NextNumber nextNumber = new NextNumber();
+
   public abstract boolean isClosed();
 
   public abstract void close() throws IOException;
@@ -52,6 +56,8 @@ public abstract class IoFile extends DefaultUserdata {
   public abstract void write(ByteString s) throws IOException;
 
   public abstract String readLine() throws IOException;
+
+  public abstract Number readNumber() throws IOException;
 
   public enum Whence {
     BEGINNING, CURRENT_POSITION, END
@@ -77,6 +83,63 @@ public abstract class IoFile extends DefaultUserdata {
   }
 
   public abstract long seek(Whence whence, long position) throws IOException;
+
+  ///
+
+  class NextLine extends AbstractFunctionAnyArg {
+
+    public NextLine() {}
+
+    @Override
+    public void invoke(ExecutionContext context, Object[] args) throws ResolvedControlThrowable {
+      try {
+        String line = readLine();
+        if (line == null) {
+          context.getReturnBuffer().setTo();
+        } else {
+          context.getReturnBuffer().setTo(ByteString.of(line));
+        }
+      } catch (IOException ex) {
+        throw new LuaRuntimeException(ex);
+      }
+    }
+
+    @Override
+    public void resume(ExecutionContext context, Object suspendedState)
+        throws ResolvedControlThrowable {
+      throw new NonsuspendableFunctionException(this.getClass());
+    }
+
+  }
+
+  class NextNumber extends AbstractFunctionAnyArg {
+
+    public NextNumber() {}
+
+    @Override
+    public void invoke(ExecutionContext context, Object[] args) throws ResolvedControlThrowable {
+      try {
+        Number number = readNumber();
+        if (number == null) {
+          context.getReturnBuffer().setTo();
+        } else {
+          context.getReturnBuffer().setTo(number);
+        }
+      } catch (IOException ex) {
+        throw new LuaRuntimeException(ex);
+      }
+    }
+
+    @Override
+    public void resume(ExecutionContext context, Object suspendedState)
+        throws ResolvedControlThrowable {
+      throw new NonsuspendableFunctionException(this.getClass());
+    }
+
+  }
+
+  ///
+
 
   static class Close extends AbstractLibFunction {
 
@@ -135,40 +198,10 @@ public abstract class IoFile extends DefaultUserdata {
     @Override
     protected void invoke(ExecutionContext context, ArgumentIterator args)
         throws ResolvedControlThrowable {
-      // throw new UnsupportedOperationException(); // TODO
       final IoFile f = args.nextUserdata(typeName(), IoFile.class);
       NextLine nextLineFunc = f.nextLine;
       context.getReturnBuffer().setTo(nextLineFunc);
     }
-
-  }
-
-  private NextLine nextLine = new NextLine();
-
-  class NextLine extends AbstractFunctionAnyArg {
-
-    public NextLine() {}
-
-    @Override
-    public void invoke(ExecutionContext context, Object[] args) throws ResolvedControlThrowable {
-      try {
-        String line = readLine();
-        if (line == null) {
-          context.getReturnBuffer().setTo();
-        } else {
-          context.getReturnBuffer().setTo(ByteString.of(line));
-        }
-      } catch (IOException ex) {
-        throw new LuaRuntimeException(ex);
-      }
-    }
-
-    @Override
-    public void resume(ExecutionContext context, Object suspendedState)
-        throws ResolvedControlThrowable {
-      throw new NonsuspendableFunctionException(this.getClass());
-    }
-
 
   }
 
@@ -190,8 +223,11 @@ public abstract class IoFile extends DefaultUserdata {
         case NEXT_LINE:
           f.nextLine.invoke(context);
           return;
+        case AS_NUMBER:
+          f.nextNumber.invoke(context);
+          return;
         default:
-          throw new UnsupportedOperationException("Unsupported format: "+format);
+          throw new UnsupportedOperationException("Unsupported format: " + format);
       }
     }
 
