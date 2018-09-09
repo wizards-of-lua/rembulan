@@ -1,5 +1,5 @@
 /*
- * Copyright 2016 Miroslav Janíček
+ * Copyright 2016 Michael Karneim
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
  * in compliance with the License. You may obtain a copy of the License at
@@ -11,30 +11,33 @@
  * or implied. See the License for the specific language governing permissions and limitations under
  * the License.
  */
-
 package net.sandius.rembulan.lib.io;
 
-import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.InputStreamReader;
 import java.nio.ByteBuffer;
+import java.nio.CharBuffer;
 import java.nio.channels.SeekableByteChannel;
+import java.nio.charset.CharsetDecoder;
 import java.nio.charset.StandardCharsets;
 import java.util.Objects;
 
 import net.sandius.rembulan.ByteString;
-import net.sandius.rembulan.Conversions;
 import net.sandius.rembulan.Table;
 import net.sandius.rembulan.lib.IoFile;
 
 public class InputStreamIoFile2 extends IoFile {
 
-  private static final char LINE_FEED = '\n';
+  private final ByteBuffer byteBuffer = ByteBuffer.wrap(new byte[16]);
+  private final CharsetDecoder decoder = StandardCharsets.UTF_8.newDecoder();
+  private final CharBuffer charBuffer = CharBuffer.wrap(new char[4]);
+
+  private final NumberTokenizer numberTokenizer =
+      new NumberTokenizer(byteBuffer, decoder, charBuffer);
+  private final LineTokenizer lineTokenizer = new LineTokenizer(byteBuffer, decoder, charBuffer);
 
   private final InputStream in;
   private final SeekableByteChannel channel;
-  private BufferedReader buffer;
 
   public InputStreamIoFile2(InputStream in, SeekableByteChannel channel, Table metatable,
       Object userValue) {
@@ -80,112 +83,19 @@ public class InputStreamIoFile2 extends IoFile {
       default:
         throw new IllegalArgumentException("Illegal whence: " + whence);
     }
-    if (current != channel.position()) {
-      buffer = null;
-    }
     return channel.position();
   }
 
   ByteBuffer buffer0 = ByteBuffer.wrap(new byte[16]);
-  
+
   @Override
   public String readLine() throws IOException {
-    StringBuilder builder = new StringBuilder();
-    long mark = channel.position();
-    long skip = 0;
-
-    buffer0.rewind();
-    buffer0.limit(buffer0.capacity());
-    int numOfBytes = channel.read(buffer0);
-    buffer0.flip();
-    while (numOfBytes != -1) {
-      // TODO why can't we simply use buffer.getChar() here???
-      // char ch = buffer.getChar();
-      byte b = buffer0.get();
-      char ch = (char) b;
-      if (ch == LINE_FEED) {
-        skip++;
-        break;
-      } else {
-        builder.append(ch);
-      }
-      int remaining = buffer0.remaining();
-      if (remaining == 0) {
-        buffer0.rewind();
-        numOfBytes = channel.read(buffer0);
-        buffer0.flip();
-      }
-    }
-
-    channel.position(mark + skip + builder.length());
-    buffer = null;
-
-    if (builder.length() == 0 && skip == 0) {
-      return null;
-    } else {
-      String text = builder.toString();
-      return text;
-    }
+    return lineTokenizer.nextToken(channel);
   }
 
   @Override
   public Number readNumber() throws IOException {
-    if (buffer == null) {
-      buffer = new BufferedReader(new InputStreamReader(in, StandardCharsets.UTF_8));
-    }
-    long mark = channel.position();
-
-    StringBuilder builder = new StringBuilder();
-    boolean hasDot = false;
-    boolean hasE = false;
-    boolean trailing = false;
-    long skip = 0;
-    while (true) {
-      int c = buffer.read();
-      if (c == -1) {
-        break;
-      } else {
-        char ch = (char) c;
-        if (ch == LINE_FEED) {
-          skip++;
-          break;
-        } else if (Character.isWhitespace(ch)) {
-          if (builder.length() > 0) {
-            trailing = true;
-          }
-          skip++;
-        } else {
-          if (trailing) {
-            break;
-          } else {
-            if (Character.isDigit(ch)) {
-              builder.append(ch);
-            } else if ('.' == ch && hasDot == false) {
-              builder.append(ch);
-            } else if ('e' == ch && hasE == false) {
-              builder.append(ch);
-            } else {
-              break;
-            }
-          }
-        }
-        // todo minus sign! one at the beginning, one after the e
-      }
-    }
-
-    channel.position(mark + skip + builder.length());
-    buffer = null;
-
-    if (builder.length() == 0) {
-      return null;
-    } else {
-      String text = builder.toString();
-      return toNumber(text);
-    }
-  }
-
-  private Number toNumber(String text) {
-    return Conversions.numericalValueOf(ByteString.of(text));
+    return numberTokenizer.nextToken(channel);
   }
 
 }
