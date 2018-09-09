@@ -86,8 +86,34 @@ public class InputStreamIoFile2 extends IoFile {
     if (buffer == null) {
       buffer = new BufferedReader(new InputStreamReader(in, StandardCharsets.UTF_8));
     }
-    String line = buffer.readLine();
-    return line;
+    long mark = channel.position();
+
+    StringBuilder builder = new StringBuilder();
+    long skip = 0;
+    while (true) {
+      int c = buffer.read();
+      if (c == -1) {
+        break;
+      } else {
+        char ch = (char) c;
+        if (ch == '\n') {
+          skip++;
+          break;
+        } else {
+          builder.append(ch);
+        }
+      }
+    }
+
+    channel.position(mark + skip + builder.length());
+    buffer = null;
+    
+    if (builder.length() == 0 && skip == 0) {
+      return null;
+    } else {
+      String text = builder.toString();
+      return text;
+    }
   }
 
   @Override
@@ -95,10 +121,7 @@ public class InputStreamIoFile2 extends IoFile {
     if (buffer == null) {
       buffer = new BufferedReader(new InputStreamReader(in, StandardCharsets.UTF_8));
     }
-    // TODO what is a reasonable value for this?
-    int readAheadLimit = 1000;
-
-    buffer.mark(readAheadLimit);
+    long mark = channel.position();
 
     StringBuilder builder = new StringBuilder();
     boolean hasDot = false;
@@ -137,9 +160,10 @@ public class InputStreamIoFile2 extends IoFile {
         // todo minus sign! one at the beginning, one after the e
       }
     }
-    buffer.reset();
-    buffer.skip(skip + builder.length());
 
+    channel.position(mark + skip + builder.length());
+    buffer = null;
+    
     if (builder.length() == 0) {
       return null;
     } else {
