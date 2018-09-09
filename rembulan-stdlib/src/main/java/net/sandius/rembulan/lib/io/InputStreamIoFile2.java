@@ -93,20 +93,14 @@ public class InputStreamIoFile2 extends IoFile {
 
     StringBuilder builder = new StringBuilder();
     long skip = 0;
-    boolean carriageReturn = false;
     while (true) {
       int c = buffer.read();
       if (c == -1) {
         break;
       } else {
         char ch = (char) c;
-        if (ch == CARRIAGE_RETURN) {
+        if (ch == LINE_FEED) {
           skip++;
-          carriageReturn = true;
-        } else if (ch == LINE_FEED) {
-          skip++;
-          break;
-        } else if (carriageReturn) {
           break;
         } else {
           builder.append(ch);
@@ -136,7 +130,6 @@ public class InputStreamIoFile2 extends IoFile {
     boolean hasDot = false;
     boolean hasE = false;
     boolean trailing = false;
-    boolean carriageReturn = false;
     long skip = 0;
     while (true) {
       int c = buffer.read();
@@ -144,13 +137,8 @@ public class InputStreamIoFile2 extends IoFile {
         break;
       } else {
         char ch = (char) c;
-        if (ch == CARRIAGE_RETURN) {
+        if (ch == LINE_FEED) {
           skip++;
-          carriageReturn = true;
-        } else if (ch == LINE_FEED) {
-          skip++;
-          break;
-        } else if (carriageReturn) {
           break;
         } else if (Character.isWhitespace(ch)) {
           if (builder.length() > 0) {

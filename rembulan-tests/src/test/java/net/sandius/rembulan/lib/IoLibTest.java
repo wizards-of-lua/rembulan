@@ -118,7 +118,7 @@ public class IoLibTest extends TestBase {
     Object[] actual = run(program, path.toString());
     
     // Then:
-    assertThat(actual[0]).isEqualTo("hello\nworld");
+    assertThat(actual[0]).isEqualTo("hello\rworld");
   }
   
   @Test
@@ -132,7 +132,7 @@ public class IoLibTest extends TestBase {
     Object[] actual = run(program, path.toString());
     
     // Then:
-    assertThat(actual[0]).isEqualTo("hello\nworld");
+    assertThat(actual[0]).isEqualTo("hello\r\nworld");
   }
   
   @Test
