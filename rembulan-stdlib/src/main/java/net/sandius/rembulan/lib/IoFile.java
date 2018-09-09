@@ -1,245 +1,285 @@
 /*
  * Copyright 2016 Miroslav Janíček
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
+ * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
+ * in compliance with the License. You may obtain a copy of the License at
  *
- *     http://www.apache.org/licenses/LICENSE-2.0
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Unless required by applicable law or agreed to in writing, software distributed under the License
+ * is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express
+ * or implied. See the License for the specific language governing permissions and limitations under
+ * the License.
  */
 
 package net.sandius.rembulan.lib;
 
+import java.io.IOException;
+
 import net.sandius.rembulan.ByteString;
+import net.sandius.rembulan.LuaRuntimeException;
 import net.sandius.rembulan.Table;
 import net.sandius.rembulan.impl.DefaultUserdata;
+import net.sandius.rembulan.impl.NonsuspendableFunctionException;
+import net.sandius.rembulan.runtime.AbstractFunctionAnyArg;
 import net.sandius.rembulan.runtime.ExecutionContext;
 import net.sandius.rembulan.runtime.ResolvedControlThrowable;
-
-import java.io.IOException;
 
 /**
  * A file handle used by the {@link IoLib I/O library}.
  */
 public abstract class IoFile extends DefaultUserdata {
 
-	protected IoFile(Table metatable, Object userValue) {
-		super(metatable, userValue);
-	}
+  protected IoFile(Table metatable, Object userValue) {
+    super(metatable, userValue);
+  }
 
-	static String typeName() {
-		return "FILE*";
-	}
+  static String typeName() {
+    return "FILE*";
+  }
 
-	@Override
-	public String toString() {
-		return "file (0x" + Integer.toHexString(hashCode()) + ")";
-	}
+  @Override
+  public String toString() {
+    return "file (0x" + Integer.toHexString(hashCode()) + ")";
+  }
 
-	public abstract boolean isClosed();
+  public abstract boolean isClosed();
 
-	public abstract void close() throws IOException;
+  public abstract void close() throws IOException;
 
-	public abstract void flush() throws IOException;
+  public abstract void flush() throws IOException;
 
-	public abstract void write(ByteString s) throws IOException;
+  public abstract void write(ByteString s) throws IOException;
 
-	public enum Whence {
-		BEGINNING,
-		CURRENT_POSITION,
-		END
-	}
+  public abstract String readLine() throws IOException;
 
-	public abstract long seek(Whence whence, long position) throws IOException;
+  public enum Whence {
+    BEGINNING, CURRENT_POSITION, END
+  }
 
-	static class Close extends AbstractLibFunction {
+  public abstract long seek(Whence whence, long position) throws IOException;
 
-		@Override
-		protected String name() {
-			return "close";
-		}
+  static class Close extends AbstractLibFunction {
 
-		@Override
-		protected void invoke(ExecutionContext context, ArgumentIterator args) throws ResolvedControlThrowable {
-			final IoFile f = args.nextUserdata(typeName(), IoFile.class);
+    @Override
+    protected String name() {
+      return "close";
+    }
 
-			try {
-				f.close();
-			}
-			catch (Exception ex) {
-				context.getReturnBuffer().setTo(null, ex.getMessage());
-				return;
-			}
+    @Override
+    protected void invoke(ExecutionContext context, ArgumentIterator args)
+        throws ResolvedControlThrowable {
+      final IoFile f = args.nextUserdata(typeName(), IoFile.class);
 
-			context.getReturnBuffer().setTo(true);
-		}
+      try {
+        f.close();
+      } catch (Exception ex) {
+        context.getReturnBuffer().setTo(null, ex.getMessage());
+        return;
+      }
 
-	}
+      context.getReturnBuffer().setTo(true);
+    }
 
-	static class Flush extends AbstractLibFunction {
+  }
 
-		@Override
-		protected String name() {
-			return "flush";
-		}
+  static class Flush extends AbstractLibFunction {
 
-		@Override
-		protected void invoke(ExecutionContext context, ArgumentIterator args) throws ResolvedControlThrowable {
-			final IoFile f = args.nextUserdata(typeName(), IoFile.class);
-			try {
-				f.flush();
-			}
-			catch (Exception ex) {
-				context.getReturnBuffer().setTo(null, ex.getMessage());
-				return;
-			}
+    @Override
+    protected String name() {
+      return "flush";
+    }
 
-			context.getReturnBuffer().setTo(true);
-		}
+    @Override
+    protected void invoke(ExecutionContext context, ArgumentIterator args)
+        throws ResolvedControlThrowable {
+      final IoFile f = args.nextUserdata(typeName(), IoFile.class);
+      try {
+        f.flush();
+      } catch (Exception ex) {
+        context.getReturnBuffer().setTo(null, ex.getMessage());
+        return;
+      }
 
-	}
+      context.getReturnBuffer().setTo(true);
+    }
 
-	static class Lines extends AbstractLibFunction {
+  }
 
-		@Override
-		protected String name() {
-			return "lines";
-		}
+  static class Lines extends AbstractLibFunction {
 
-		@Override
-		protected void invoke(ExecutionContext context, ArgumentIterator args) throws ResolvedControlThrowable {
-			throw new UnsupportedOperationException();  // TODO
-		}
+    @Override
+    protected String name() {
+      return "lines";
+    }
 
-	}
+    @Override
+    protected void invoke(ExecutionContext context, ArgumentIterator args)
+        throws ResolvedControlThrowable {
+      // throw new UnsupportedOperationException(); // TODO
+      final IoFile f = args.nextUserdata(typeName(), IoFile.class);
+      NextLine nextLineFunc = f.nextLine;
+      context.getReturnBuffer().setTo(nextLineFunc);
+    }
 
-	static class Read extends AbstractLibFunction {
+  }
 
-		@Override
-		protected String name() {
-			return "read";
-		}
+  private NextLine nextLine = new NextLine();
 
-		@Override
-		protected void invoke(ExecutionContext context, ArgumentIterator args) throws ResolvedControlThrowable {
-			final IoFile f = args.nextUserdata(typeName(), IoFile.class);
-			throw new UnsupportedOperationException();  // TODO
-		}
+  class NextLine extends AbstractFunctionAnyArg {
 
-	}
+    public NextLine() {}
 
-	static class Seek extends AbstractLibFunction {
+    @Override
+    public void invoke(ExecutionContext context, Object[] args) throws ResolvedControlThrowable {
+      try {
+        String line = readLine();
+        if (line == null) {
+          context.getReturnBuffer().setTo();
+        } else {
+          context.getReturnBuffer().setTo(ByteString.of(line));
+        }
+      } catch (IOException ex) {
+        throw new LuaRuntimeException(ex);
+      }
+    }
 
-		@Override
-		protected String name() {
-			return "seek";
-		}
+    @Override
+    public void resume(ExecutionContext context, Object suspendedState)
+        throws ResolvedControlThrowable {
+      throw new NonsuspendableFunctionException(this.getClass());
+    }
 
-		private static Whence stringToWhence(String s) {
-			switch (s) {
-				case "set": return Whence.BEGINNING;
-				case "cur": return Whence.CURRENT_POSITION;
-				case "end": return Whence.END;
-				default: return null;
-			}
-		}
 
-		@Override
-		protected void invoke(ExecutionContext context, ArgumentIterator args) throws ResolvedControlThrowable {
-			IoFile file = args.nextUserdata(typeName(), IoFile.class);
+  }
 
-			final Whence whence;
-			final long offset;
+  static class Read extends AbstractLibFunction {
 
-			if (args.hasNext()) {
-				String s = args.nextString().toString();  // FIXME
-				Whence w = stringToWhence(s);
-				if (w == null) {
-					throw new BadArgumentException(1, name(), "invalid option '" + s + "'");
-				}
+    @Override
+    protected String name() {
+      return "read";
+    }
 
-				whence = w;
-				offset = args.nextOptionalInteger(0L);
-			}
-			else {
-				whence = Whence.CURRENT_POSITION;
-				offset = 0L;
-			}
+    @Override
+    protected void invoke(ExecutionContext context, ArgumentIterator args)
+        throws ResolvedControlThrowable {
+      final IoFile f = args.nextUserdata(typeName(), IoFile.class);
+      throw new UnsupportedOperationException(); // TODO
+    }
 
-			final long position;
-			try {
-				position = file.seek(whence, offset);
-			}
-			catch (Exception ex) {
-				context.getReturnBuffer().setTo(null, ex.getMessage());
-				return;
-			}
+  }
 
-			context.getReturnBuffer().setTo(position);
-		}
+  static class Seek extends AbstractLibFunction {
 
-	}
+    @Override
+    protected String name() {
+      return "seek";
+    }
 
-	static class SetVBuf extends AbstractLibFunction {
+    private static Whence stringToWhence(String s) {
+      switch (s) {
+        case "set":
+          return Whence.BEGINNING;
+        case "cur":
+          return Whence.CURRENT_POSITION;
+        case "end":
+          return Whence.END;
+        default:
+          return null;
+      }
+    }
 
-		@Override
-		protected String name() {
-			return "setvbuf";
-		}
+    @Override
+    protected void invoke(ExecutionContext context, ArgumentIterator args)
+        throws ResolvedControlThrowable {
+      IoFile file = args.nextUserdata(typeName(), IoFile.class);
 
-		@Override
-		protected void invoke(ExecutionContext context, ArgumentIterator args) throws ResolvedControlThrowable {
-			throw new UnsupportedOperationException();  // TODO
-		}
+      final Whence whence;
+      final long offset;
 
-	}
+      if (args.hasNext()) {
+        String s = args.nextString().toString(); // FIXME
+        Whence w = stringToWhence(s);
+        if (w == null) {
+          throw new BadArgumentException(1, name(), "invalid option '" + s + "'");
+        }
 
-	static class Write extends AbstractLibFunction {
+        whence = w;
+        offset = args.nextOptionalInteger(0L);
+      } else {
+        whence = Whence.CURRENT_POSITION;
+        offset = 0L;
+      }
 
-		@Override
-		protected String name() {
-			return "write";
-		}
+      final long position;
+      try {
+        position = file.seek(whence, offset);
+      } catch (Exception ex) {
+        context.getReturnBuffer().setTo(null, ex.getMessage());
+        return;
+      }
 
-		@Override
-		protected void invoke(ExecutionContext context, ArgumentIterator args) throws ResolvedControlThrowable {
-			final IoFile f = args.nextUserdata(typeName(), IoFile.class);
-			while (args.hasNext()) {
-				final ByteString s = args.nextString();
-				try {
-					f.write(s);
-				}
-				catch (Exception ex) {
-					context.getReturnBuffer().setTo(null, ex.getMessage());
-					return;
-				}
-			}
+      context.getReturnBuffer().setTo(position);
+    }
 
-			context.getReturnBuffer().setTo(f);
-		}
+  }
 
-	}
+  static class SetVBuf extends AbstractLibFunction {
 
-	static class ToString extends AbstractLibFunction {
+    @Override
+    protected String name() {
+      return "setvbuf";
+    }
 
-		@Override
-		protected String name() {
-			return "tostring";
-		}
+    @Override
+    protected void invoke(ExecutionContext context, ArgumentIterator args)
+        throws ResolvedControlThrowable {
+      throw new UnsupportedOperationException(); // TODO
+    }
 
-		@Override
-		protected void invoke(ExecutionContext context, ArgumentIterator args) throws ResolvedControlThrowable {
-			IoFile f = args.nextUserdata(typeName(), IoFile.class);
-			context.getReturnBuffer().setTo(f.toString());
-		}
+  }
 
-	}
+  static class Write extends AbstractLibFunction {
+
+    @Override
+    protected String name() {
+      return "write";
+    }
+
+    @Override
+    protected void invoke(ExecutionContext context, ArgumentIterator args)
+        throws ResolvedControlThrowable {
+      final IoFile f = args.nextUserdata(typeName(), IoFile.class);
+      while (args.hasNext()) {
+        final ByteString s = args.nextString();
+        try {
+          f.write(s);
+        } catch (Exception ex) {
+          context.getReturnBuffer().setTo(null, ex.getMessage());
+          return;
+        }
+      }
+
+      context.getReturnBuffer().setTo(f);
+    }
+
+  }
+
+  static class ToString extends AbstractLibFunction {
+
+    @Override
+    protected String name() {
+      return "tostring";
+    }
+
+    @Override
+    protected void invoke(ExecutionContext context, ArgumentIterator args)
+        throws ResolvedControlThrowable {
+      IoFile f = args.nextUserdata(typeName(), IoFile.class);
+      context.getReturnBuffer().setTo(f.toString());
+    }
+
+  }
 
 }
 

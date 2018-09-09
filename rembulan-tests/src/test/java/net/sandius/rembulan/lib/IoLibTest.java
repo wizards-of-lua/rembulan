@@ -32,16 +32,14 @@ public class IoLibTest extends TestBase {
     run(program, "aaa", "bbb");
 
     // Then:
-    String oo = getString(output);
-    System.out.println(oo);
-    assertThat(oo).isEqualTo("a=aaa\tb=bbb\n");
+    String actual = getString(output);
+    assertThat(actual).isEqualTo("a=aaa\tb=bbb\n");
   }
 
   @Test
-  @Ignore
   public void test3() throws Exception {
-    Path path = createTempFile("hello");
     // Given:
+    Path path = createTempFile("hello");
     String program = loadResource("test3.lua");
 
     // When:

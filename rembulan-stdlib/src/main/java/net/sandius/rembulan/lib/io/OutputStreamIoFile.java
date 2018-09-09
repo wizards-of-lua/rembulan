@@ -67,4 +67,9 @@ public class OutputStreamIoFile extends IoFile {
 		}
 	}
 
+  @Override
+  public String readLine() throws IOException {
+    throw new UnsupportedOperationException("Bad file descriptor");
+  }
+
 }
