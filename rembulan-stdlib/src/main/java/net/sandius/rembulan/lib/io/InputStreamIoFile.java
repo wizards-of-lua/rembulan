@@ -14,10 +14,12 @@
 
 package net.sandius.rembulan.lib.io;
 
+import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.nio.charset.StandardCharsets;
 import java.util.Objects;
-import java.util.Scanner;
 
 import net.sandius.rembulan.ByteString;
 import net.sandius.rembulan.Table;
@@ -26,10 +28,12 @@ import net.sandius.rembulan.lib.IoFile;
 public class InputStreamIoFile extends IoFile {
 
   private final SeekableInputStream in;
+  private final BufferedReader reader;
 
   public InputStreamIoFile(InputStream in, Table metatable, Object userValue) {
     super(metatable, userValue);
     this.in = new SeekableInputStream(Objects.requireNonNull(in));
+    this.reader = new BufferedReader(new InputStreamReader(in, StandardCharsets.UTF_8));
   }
 
   @Override
@@ -39,7 +43,9 @@ public class InputStreamIoFile extends IoFile {
 
   @Override
   public void close() throws IOException {
-    throw new UnsupportedOperationException("cannot close standard file");
+    reader.close();
+    in.close();
+    // throw new UnsupportedOperationException("cannot close standard file");
   }
 
   @Override
@@ -69,12 +75,7 @@ public class InputStreamIoFile extends IoFile {
 
   @Override
   public String readLine() throws IOException {
-    try (Scanner scanner = new Scanner(in)) {
-      if ( scanner.hasNext()) {
-        return scanner.nextLine();
-      }
-      return null;
-    }
+    return reader.readLine();
   }
 
 }

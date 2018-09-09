@@ -56,6 +56,25 @@ public abstract class IoFile extends DefaultUserdata {
   public enum Whence {
     BEGINNING, CURRENT_POSITION, END
   }
+  public enum Format {
+    AS_NUMBER, WHOLE_FILE, NEXT_LINE, NUMBER_OF_CHARACTERS;
+
+    public static Format get(Object specifier) {
+      if (ByteString.of("*n").equals(specifier)) {
+        return Format.AS_NUMBER;
+      }
+      if (ByteString.of("*a").equals(specifier)) {
+        return Format.WHOLE_FILE;
+      }
+      if (ByteString.of("*l").equals(specifier)) {
+        return Format.NEXT_LINE;
+      }
+      if (specifier instanceof Number) {
+        return Format.NUMBER_OF_CHARACTERS;
+      }
+      throw new IllegalArgumentException("Unknown format specifier: '" + specifier + "'");
+    }
+  }
 
   public abstract long seek(Whence whence, long position) throws IOException;
 
@@ -163,8 +182,17 @@ public abstract class IoFile extends DefaultUserdata {
     @Override
     protected void invoke(ExecutionContext context, ArgumentIterator args)
         throws ResolvedControlThrowable {
+      // throw new UnsupportedOperationException(); // TODO
       final IoFile f = args.nextUserdata(typeName(), IoFile.class);
-      throw new UnsupportedOperationException(); // TODO
+      Object formatSpecfifier = args.nextOptionalAny(ByteString.of("*l"));
+      Format format = Format.get(formatSpecfifier);
+      switch (format) {
+        case NEXT_LINE:
+          f.nextLine.invoke(context);
+          return;
+        default:
+          throw new UnsupportedOperationException("Unsupported format: "+format);
+      }
     }
 
   }
