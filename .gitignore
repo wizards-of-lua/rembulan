@@ -6,5 +6,6 @@ target
 **/.project
 **/.settings
 **/bin
+**/temp
 **/build
 *.launch
