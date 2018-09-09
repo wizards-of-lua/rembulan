@@ -513,18 +513,11 @@ public final class IoLib {
 
     Path path = fileSystem.getPath(filename.toString());
 
-    // FileInputStream fin = new FileInputStream(f);
-    // FileChannel channel = fin.getChannel();
-    //
-    // ByteBuffer buffer = ByteBuffer.allocate(1);
-    // int xx = channel.read(buffer);
-    //
     try {
-      SeekableByteChannel channel = Files.newByteChannel(path, StandardOpenOption.READ);
-      InputStream in = Channels.newInputStream(channel);
-
       switch (mode) {
         case READ:
+          SeekableByteChannel channel = Files.newByteChannel(path, StandardOpenOption.READ);
+          InputStream in = Channels.newInputStream(channel);
           return new InputStreamIoFile2(in, channel, this.fileMetatable, null);
         default:
           throw new UnsupportedOperationException("open file"); // TODO

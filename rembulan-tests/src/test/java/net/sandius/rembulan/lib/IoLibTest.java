@@ -39,6 +39,19 @@ public class IoLibTest extends TestBase {
   }
 
   @Test
+  public void test_readFile_with_single_line_having_one_character() throws Exception {
+    // Given:
+    Path path = createTempFile("a");
+    String program = loadResource("readFile.lua");
+
+    // When:
+    Object[] actual = run(program, path.toString());
+
+    // Then:
+    assertThat(actual[0]).isEqualTo("a");
+  }
+  
+  @Test
   public void test_readFile_with_single_line() throws Exception {
     // Given:
     Path path = createTempFile("hello");

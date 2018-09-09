@@ -18,6 +18,7 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.nio.ByteBuffer;
 import java.nio.channels.SeekableByteChannel;
 import java.nio.charset.StandardCharsets;
 import java.util.Objects;
@@ -30,7 +31,6 @@ import net.sandius.rembulan.lib.IoFile;
 public class InputStreamIoFile2 extends IoFile {
 
   private static final char LINE_FEED = '\n';
-  private static final char CARRIAGE_RETURN = '\r';
 
   private final InputStream in;
   private final SeekableByteChannel channel;
@@ -86,27 +86,34 @@ public class InputStreamIoFile2 extends IoFile {
     return channel.position();
   }
 
+  ByteBuffer buffer0 = ByteBuffer.wrap(new byte[16]);
+  
   @Override
   public String readLine() throws IOException {
-    if (buffer == null) {
-      buffer = new BufferedReader(new InputStreamReader(in, StandardCharsets.UTF_8));
-    }
-    long mark = channel.position();
-
     StringBuilder builder = new StringBuilder();
+    long mark = channel.position();
     long skip = 0;
-    while (true) {
-      int c = buffer.read();
-      if (c == -1) {
+
+    buffer0.rewind();
+    buffer0.limit(buffer0.capacity());
+    int numOfBytes = channel.read(buffer0);
+    buffer0.flip();
+    while (numOfBytes != -1) {
+      // TODO why can't we simply use buffer.getChar() here???
+      // char ch = buffer.getChar();
+      byte b = buffer0.get();
+      char ch = (char) b;
+      if (ch == LINE_FEED) {
+        skip++;
         break;
       } else {
-        char ch = (char) c;
-        if (ch == LINE_FEED) {
-          skip++;
-          break;
-        } else {
-          builder.append(ch);
-        }
+        builder.append(ch);
+      }
+      int remaining = buffer0.remaining();
+      if (remaining == 0) {
+        buffer0.rewind();
+        numOfBytes = channel.read(buffer0);
+        buffer0.flip();
       }
     }
 
