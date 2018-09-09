@@ -108,6 +108,34 @@ public class IoLibTest extends TestBase {
   }
   
   @Test
+  public void test_readFile_with_two_lines_separated_by_carriage_return() throws Exception {
+    // Given:
+    String content = "hello\rworld";
+    Path path = createTempFile(content);
+    String program = loadResource("readFile.lua");
+
+    // When:
+    Object[] actual = run(program, path.toString());
+    
+    // Then:
+    assertThat(actual[0]).isEqualTo("hello\nworld");
+  }
+  
+  @Test
+  public void test_readFile_with_two_lines_separated_by_carriage_return_line_feed() throws Exception {
+    // Given:
+    String content = "hello\r\nworld";
+    Path path = createTempFile(content);
+    String program = loadResource("readFile.lua");
+
+    // When:
+    Object[] actual = run(program, path.toString());
+    
+    // Then:
+    assertThat(actual[0]).isEqualTo("hello\nworld");
+  }
+  
+  @Test
   public void test_readFile_with_three_lines() throws Exception {
     // Given:
     String content = "one\ntwo\nthree";
@@ -195,6 +223,20 @@ public class IoLibTest extends TestBase {
   public void test_readFile3_with_two_digits_separated_by_newline() throws Exception {
     // Given:
     String content = "8\n2";
+    Path path = createTempFile(content);
+    String program = loadResource("readFile3.lua");
+
+    // When:
+    Object[] actual = run(program, path.toString());
+    
+    // Then:
+    assertThat(actual[0]).isEqualTo(10L);
+  }
+  
+  @Test
+  public void test_readFile3_with_two_digits_separated_by_carriage_return() throws Exception {
+    // Given:
+    String content = "8\r2";
     Path path = createTempFile(content);
     String program = loadResource("readFile3.lua");
 

@@ -29,6 +29,9 @@ import net.sandius.rembulan.lib.IoFile;
 
 public class InputStreamIoFile2 extends IoFile {
 
+  private static final char LINE_FEED = '\n';
+  private static final char CARRIAGE_RETURN = '\r';
+
   private final InputStream in;
   private final SeekableByteChannel channel;
   private BufferedReader buffer;
@@ -90,14 +93,20 @@ public class InputStreamIoFile2 extends IoFile {
 
     StringBuilder builder = new StringBuilder();
     long skip = 0;
+    boolean carriageReturn = false;
     while (true) {
       int c = buffer.read();
       if (c == -1) {
         break;
       } else {
         char ch = (char) c;
-        if (ch == '\n') {
+        if (ch == CARRIAGE_RETURN) {
           skip++;
+          carriageReturn = true;
+        } else if (ch == LINE_FEED) {
+          skip++;
+          break;
+        } else if (carriageReturn) {
           break;
         } else {
           builder.append(ch);
@@ -107,7 +116,7 @@ public class InputStreamIoFile2 extends IoFile {
 
     channel.position(mark + skip + builder.length());
     buffer = null;
-    
+
     if (builder.length() == 0 && skip == 0) {
       return null;
     } else {
@@ -127,6 +136,7 @@ public class InputStreamIoFile2 extends IoFile {
     boolean hasDot = false;
     boolean hasE = false;
     boolean trailing = false;
+    boolean carriageReturn = false;
     long skip = 0;
     while (true) {
       int c = buffer.read();
@@ -134,14 +144,19 @@ public class InputStreamIoFile2 extends IoFile {
         break;
       } else {
         char ch = (char) c;
-        if (Character.isWhitespace(ch)) {
+        if (ch == CARRIAGE_RETURN) {
+          skip++;
+          carriageReturn = true;
+        } else if (ch == LINE_FEED) {
+          skip++;
+          break;
+        } else if (carriageReturn) {
+          break;
+        } else if (Character.isWhitespace(ch)) {
           if (builder.length() > 0) {
             trailing = true;
           }
           skip++;
-        } else if (ch == '\n') {
-          skip++;
-          break;
         } else {
           if (trailing) {
             break;
@@ -163,7 +178,7 @@ public class InputStreamIoFile2 extends IoFile {
 
     channel.position(mark + skip + builder.length());
     buffer = null;
-    
+
     if (builder.length() == 0) {
       return null;
     } else {
