@@ -420,5 +420,121 @@ public class IoLibTest extends TestBase {
     assertThat(actual[0]).isEqualTo(null);
     assertThat(actual[1]).isEqualTo("bbbb   ");
   }
+  
+  @Test 
+  public void test_readFile5_seek_set_10() throws Exception {
+    // Given:
+    String content = "123456789a123456789b123456789c";
+    Path path = createTempFile(content);
+    String program = loadResource("readFile5.lua");
+    
+    // When:
+    Object[] actual = run(program, path.toString(), "set", 10);
+
+    // Then:
+    assertThat(actual[0]).isEqualTo("123456789b123456789c");
+  }
+  
+  @Test 
+  public void test_readFile5_seek_set_20() throws Exception {
+    // Given:
+    String content = "123456789a123456789b123456789c";
+    Path path = createTempFile(content);
+    String program = loadResource("readFile5.lua");
+    
+    // When:
+    Object[] actual = run(program, path.toString(), "set", 20);
+
+    // Then:
+    assertThat(actual[0]).isEqualTo("123456789c");
+  }
+  
+  @Test 
+  public void test_readFile5_seek_end_1() throws Exception {
+    // Given:
+    String content = "123456789a123456789b123456789c";
+    Path path = createTempFile(content);
+    String program = loadResource("readFile5.lua");
+    
+    // When:
+    Object[] actual = run(program, path.toString(), "end", -1);
+
+    // Then:
+    assertThat(actual[0]).isEqualTo("c");
+  }
+  
+  @Test 
+  public void test_readFile5_seek_end_10() throws Exception {
+    // Given:
+    String content = "123456789a123456789b123456789c";
+    Path path = createTempFile(content);
+    String program = loadResource("readFile5.lua");
+    
+    // When:
+    Object[] actual = run(program, path.toString(), "end", -10);
+
+    // Then:
+    assertThat(actual[0]).isEqualTo("123456789c");
+  }
+  
+  @Test 
+  public void test_readFile6_one_line_set_5_cur_10() throws Exception {
+    // Given:
+    String content = "123456789a123456789b123456789c";
+    Path path = createTempFile(content);
+    String program = loadResource("readFile6.lua");
+    
+    // When:
+    Object[] actual = run(program, path.toString(), "set", 5, "cur", 10);
+
+    // Then:
+    assertThat(actual[0]).isEqualTo("6789a123456789b123456789c");
+    assertThat(actual[1]).isNull();
+  }
+  
+  @Test 
+  public void test_readFile6_one_line_set_5_end_minus_10() throws Exception {
+    // Given:
+    String content = "123456789a123456789b123456789c";
+    Path path = createTempFile(content);
+    String program = loadResource("readFile6.lua");
+    
+    // When:
+    Object[] actual = run(program, path.toString(), "set", 5, "end", -10);
+
+    // Then:
+    assertThat(actual[0]).isEqualTo("6789a123456789b123456789c");
+    assertThat(actual[1]).isEqualTo("123456789c");
+  }
+  
+  @Test 
+  public void test_readFile6_two_lines_set_5_cur_10() throws Exception {
+    // Given:
+    String content = "123456789a123456789b123456789c\n123456789d123456789e123456789f";
+    Path path = createTempFile(content);
+    String program = loadResource("readFile6.lua");
+    
+    // When:
+    Object[] actual = run(program, path.toString(), "set", 5, "cur", 10);
+
+    // Then:
+    assertThat(actual[0]).isEqualTo("6789a123456789b123456789c");
+    assertThat(actual[1]).isEqualTo("123456789e123456789f");
+  }
+  
+  @Test 
+  public void test_readFile6_one_line_end_0_set_0() throws Exception {
+    // Given:
+    String content = "123456789a123456789b123456789c";
+    Path path = createTempFile(content);
+    String program = loadResource("readFile6.lua");
+    
+    // When:
+    Object[] actual = run(program, path.toString(), "end", 0, "set", 0);
+
+    // Then:
+    assertThat(actual[0]).isNull();
+    assertThat(actual[1]).isEqualTo("123456789a123456789b123456789c");
+  }
 
 }

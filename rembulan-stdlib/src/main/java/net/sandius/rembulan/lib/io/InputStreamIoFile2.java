@@ -69,9 +69,11 @@ public class InputStreamIoFile2 extends IoFile {
     switch (whence) {
       case BEGINNING:
         channel.position(offset);
+        break;
       case END:
         long size = channel.size();
-        channel.position(size - offset);
+        channel.position(size + offset);
+        break;
       case CURRENT_POSITION:
         channel.position(current + offset);
         break;
