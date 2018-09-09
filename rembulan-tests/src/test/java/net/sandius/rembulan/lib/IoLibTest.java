@@ -3,10 +3,13 @@ package net.sandius.rembulan.lib;
 import java.io.ByteArrayOutputStream;
 import java.nio.file.Path;
 
+import org.junit.FixMethodOrder;
 import org.junit.Test;
+import org.junit.runners.MethodSorters;
 
 import net.sandius.rembulan.testenv.TestBase;
 
+@FixMethodOrder(MethodSorters.JVM)
 public class IoLibTest extends TestBase {
 
   @Test
@@ -284,6 +287,96 @@ public class IoLibTest extends TestBase {
     
     // Then:
     assertThat(actual[0]).isEqualTo(3.2D);
+  }
+
+  @Test
+  public void test_readFile4_number_and_line() throws Exception {
+    // Given:
+    String content = "1a";
+    Path path = createTempFile(content);
+    String program = loadResource("readFile4.lua");
+
+    // When:
+    Object[] actual = run(program, path.toString());
+    
+    // Then:
+    assertThat(actual[0]).isEqualTo(1L);
+    assertThat(actual[1]).isEqualTo("a");
+  }
+
+  @Test
+  public void test_readFile4_line_and_number() throws Exception {
+    // Given:
+    String content = "a\n1";
+    Path path = createTempFile(content);
+    String program = loadResource("readFile4.lua");
+
+    // When:
+    Object[] actual = run(program, path.toString());
+    
+    // Then:
+    assertThat(actual[0]).isEqualTo(1L);
+    assertThat(actual[1]).isEqualTo("a");
+  }
+  
+  @Test
+  public void test_readFile4_two_numbers_and_line() throws Exception {
+    // Given:
+    String content = "1\n2\na";
+    Path path = createTempFile(content);
+    String program = loadResource("readFile4.lua");
+
+    // When:
+    Object[] actual = run(program, path.toString());
+    
+    // Then:
+    assertThat(actual[0]).isEqualTo(3L);
+    assertThat(actual[1]).isEqualTo("a");
+  }
+  
+  @Test
+  public void test_readFile4_two_lines_and_number() throws Exception {
+    // Given:
+    String content = "a\nb\n1";
+    Path path = createTempFile(content);
+    String program = loadResource("readFile4.lua");
+
+    // When:
+    Object[] actual = run(program, path.toString());
+    
+    // Then:
+    assertThat(actual[0]).isEqualTo(1L);
+    assertThat(actual[1]).isEqualTo("a\nb");
+  }
+  
+  @Test
+  public void test_readFile4_spaces_and_text() throws Exception {
+    // Given:
+    String content = "   aaaa";
+    Path path = createTempFile(content);
+    String program = loadResource("readFile4.lua");
+
+    // When:
+    Object[] actual = run(program, path.toString());
+    
+    // Then:
+    assertThat(actual[0]).isEqualTo(null);
+    assertThat(actual[1]).isEqualTo("aaaa");
+  }
+  
+  @Test
+  public void test_readFile4_spaces_and_text_and_spaces() throws Exception {
+    // Given:
+    String content = "   bbbb   ";
+    Path path = createTempFile(content);
+    String program = loadResource("readFile4.lua");
+
+    // When:
+    Object[] actual = run(program, path.toString());
+    
+    // Then:
+    assertThat(actual[0]).isEqualTo(null);
+    assertThat(actual[1]).isEqualTo("bbbb   ");
   }
 
 }

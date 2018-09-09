@@ -39,6 +39,8 @@ package net.sandius.rembulan.lib;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.nio.channels.Channels;
+import java.nio.channels.SeekableByteChannel;
 import java.nio.file.FileSystem;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -56,6 +58,7 @@ import net.sandius.rembulan.TableFactory;
 import net.sandius.rembulan.env.RuntimeEnvironment;
 import net.sandius.rembulan.impl.UnimplementedFunction;
 import net.sandius.rembulan.lib.io.InputStreamIoFile;
+import net.sandius.rembulan.lib.io.InputStreamIoFile2;
 import net.sandius.rembulan.lib.io.OutputStreamIoFile;
 import net.sandius.rembulan.runtime.Dispatch;
 import net.sandius.rembulan.runtime.ExecutionContext;
@@ -509,11 +512,20 @@ public final class IoLib {
     }
 
     Path path = fileSystem.getPath(filename.toString());
+
+    // FileInputStream fin = new FileInputStream(f);
+    // FileChannel channel = fin.getChannel();
+    //
+    // ByteBuffer buffer = ByteBuffer.allocate(1);
+    // int xx = channel.read(buffer);
+    //
     try {
+      SeekableByteChannel channel = Files.newByteChannel(path, StandardOpenOption.READ);
+      InputStream in = Channels.newInputStream(channel);
+
       switch (mode) {
         case READ:
-          return new InputStreamIoFile(Files.newInputStream(path, StandardOpenOption.READ),
-              this.fileMetatable, null);
+          return new InputStreamIoFile2(in, channel, this.fileMetatable, null);
         default:
           throw new UnsupportedOperationException("open file"); // TODO
       }
@@ -521,6 +533,8 @@ public final class IoLib {
       throw new LuaRuntimeException(ex);
     }
   }
+
+
 
   private IoFile setDefaultInputFile(IoFile f) {
     defaultInput = Objects.requireNonNull(f);

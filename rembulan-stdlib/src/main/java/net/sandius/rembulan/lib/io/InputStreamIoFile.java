@@ -17,7 +17,6 @@ package net.sandius.rembulan.lib.io;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.Objects;
-import java.util.Scanner;
 
 import net.sandius.rembulan.ByteString;
 import net.sandius.rembulan.Table;
@@ -26,12 +25,10 @@ import net.sandius.rembulan.lib.IoFile;
 public class InputStreamIoFile extends IoFile {
 
   private final SeekableInputStream in;
-  private final Scanner scanner;
 
   public InputStreamIoFile(InputStream in, Table metatable, Object userValue) {
     super(metatable, userValue);
     this.in = new SeekableInputStream(Objects.requireNonNull(in));
-    this.scanner = new Scanner(this.in);
   }
 
   @Override
@@ -41,8 +38,7 @@ public class InputStreamIoFile extends IoFile {
 
   @Override
   public void close() throws IOException {
-    scanner.close();
-    in.close();
+    throw new UnsupportedOperationException("cannot close standard file");
   }
 
   @Override
@@ -72,27 +68,12 @@ public class InputStreamIoFile extends IoFile {
 
   @Override
   public String readLine() throws IOException {
-    if (scanner.hasNextLine()) {
-      String result = scanner.nextLine();
-      if (result.endsWith("\n")) {
-        return result.substring(0, result.length() - 1);
-      } else {
-        return result;
-      }
-    } else {
-      return null;
-    }
+    throw new UnsupportedOperationException("not implemented");
   }
 
   @Override
   public Number readNumber() throws IOException {
-    if (scanner.hasNextLong()) {
-      return scanner.nextLong();
-    }
-    if (scanner.hasNextDouble()) {
-      return scanner.nextDouble();
-    }
-    return null;
+    throw new UnsupportedOperationException("not implemented");
   }
 
 }
