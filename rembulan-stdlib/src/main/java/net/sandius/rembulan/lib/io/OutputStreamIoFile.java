@@ -77,4 +77,14 @@ public class OutputStreamIoFile extends IoFile {
     throw new UnsupportedOperationException("Bad file descriptor");
   }
 
+  @Override
+  public String readRestOfFile() throws IOException {
+    throw new UnsupportedOperationException("Bad file descriptor");
+  }
+
+  @Override
+  public String readChunk(long len) throws IOException {
+    throw new UnsupportedOperationException("Bad file descriptor");
+  }
+
 }

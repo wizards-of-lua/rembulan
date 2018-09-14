@@ -28,13 +28,16 @@ import net.sandius.rembulan.lib.IoFile;
 
 public class InputStreamIoFile2 extends IoFile {
 
-  private final ByteBuffer byteBuffer = ByteBuffer.wrap(new byte[16]);
+  private final ByteBuffer byteBuffer = ByteBuffer.wrap(new byte[64]);
   private final CharsetDecoder decoder = StandardCharsets.UTF_8.newDecoder();
-  private final CharBuffer charBuffer = CharBuffer.wrap(new char[4]);
+  private final CharBuffer charBuffer = CharBuffer.wrap(new char[16]);
 
   private final NumberTokenizer numberTokenizer =
       new NumberTokenizer(byteBuffer, decoder, charBuffer);
   private final LineTokenizer lineTokenizer = new LineTokenizer(byteBuffer, decoder, charBuffer);
+  private final RestOfFileTokenizer restOfFileTokenizer =
+      new RestOfFileTokenizer(byteBuffer, decoder, charBuffer);
+  private final ChunkTokenizer chunkTokenizer = new ChunkTokenizer(byteBuffer, decoder, charBuffer);
 
   private final InputStream in;
   private final SeekableByteChannel channel;
@@ -96,6 +99,17 @@ public class InputStreamIoFile2 extends IoFile {
   @Override
   public Number readNumber() throws IOException {
     return numberTokenizer.nextToken(channel);
+  }
+
+  @Override
+  public String readRestOfFile() throws IOException {
+    return restOfFileTokenizer.nextToken(channel);
+  }
+
+  @Override
+  public String readChunk(long len) throws IOException {
+    chunkTokenizer.setLength(len);
+    return chunkTokenizer.nextToken(channel);
   }
 
 }

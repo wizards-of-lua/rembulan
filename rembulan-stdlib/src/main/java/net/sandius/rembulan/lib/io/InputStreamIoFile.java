@@ -76,4 +76,14 @@ public class InputStreamIoFile extends IoFile {
     throw new UnsupportedOperationException("not implemented");
   }
 
+  @Override
+  public String readRestOfFile() throws IOException {
+    throw new UnsupportedOperationException("not implemented");
+  }
+
+  @Override
+  public String readChunk(long len) throws IOException {
+    throw new UnsupportedOperationException("not implemented");
+  }
+
 }

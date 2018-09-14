@@ -17,6 +17,7 @@ package net.sandius.rembulan.lib;
 import java.io.IOException;
 
 import net.sandius.rembulan.ByteString;
+import net.sandius.rembulan.Conversions;
 import net.sandius.rembulan.LuaRuntimeException;
 import net.sandius.rembulan.Table;
 import net.sandius.rembulan.impl.DefaultUserdata;
@@ -58,6 +59,10 @@ public abstract class IoFile extends DefaultUserdata {
   public abstract String readLine() throws IOException;
 
   public abstract Number readNumber() throws IOException;
+
+  public abstract String readRestOfFile() throws IOException;
+
+  public abstract String readChunk(long len) throws IOException;
 
   public enum Whence {
     BEGINNING, CURRENT_POSITION, END
@@ -207,6 +212,8 @@ public abstract class IoFile extends DefaultUserdata {
 
   static class Read extends AbstractLibFunction {
 
+    private static final ByteString DEFAULT_SPEC = ByteString.of("*l");
+
     @Override
     protected String name() {
       return "read";
@@ -215,9 +222,8 @@ public abstract class IoFile extends DefaultUserdata {
     @Override
     protected void invoke(ExecutionContext context, ArgumentIterator args)
         throws ResolvedControlThrowable {
-      // throw new UnsupportedOperationException(); // TODO
       final IoFile f = args.nextUserdata(typeName(), IoFile.class);
-      Object formatSpecfifier = args.nextOptionalAny(ByteString.of("*l"));
+      Object formatSpecfifier = args.nextOptionalAny(DEFAULT_SPEC);
       Format format = Format.get(formatSpecfifier);
       switch (format) {
         case NEXT_LINE:
@@ -225,6 +231,23 @@ public abstract class IoFile extends DefaultUserdata {
           return;
         case AS_NUMBER:
           f.nextNumber.invoke(context);
+          return;
+        case WHOLE_FILE:
+          try {
+            String result = f.readRestOfFile();
+            context.getReturnBuffer().setTo(result);
+          } catch (IOException ex) {
+            throw new LuaRuntimeException(ex);
+          }
+          return;
+        case NUMBER_OF_CHARACTERS:
+          Long len = Conversions.integerValueOf(formatSpecfifier);
+          try {
+            String result = f.readChunk(len);
+            context.getReturnBuffer().setTo(result);
+          } catch (IOException ex) {
+            throw new LuaRuntimeException(ex);
+          }
           return;
         default:
           throw new UnsupportedOperationException("Unsupported format: " + format);
@@ -344,6 +367,8 @@ public abstract class IoFile extends DefaultUserdata {
     }
 
   }
+
+
 
 }
 
