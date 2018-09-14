@@ -15,6 +15,7 @@
 package net.sandius.rembulan.lib;
 
 import java.io.IOException;
+import java.util.Optional;
 
 import net.sandius.rembulan.ByteString;
 import net.sandius.rembulan.Conversions;
@@ -54,6 +55,12 @@ public abstract class IoFile extends DefaultUserdata {
       close();
     } catch (UnsupportedOperationException ex) {
       // ignore here
+    }
+  }
+
+  protected void checkClosed() throws ClosedFileException {
+    if (isClosed()) {
+      throw new ClosedFileException();
     }
   }
 
@@ -217,6 +224,11 @@ public abstract class IoFile extends DefaultUserdata {
     protected void invoke(ExecutionContext context, ArgumentIterator args)
         throws ResolvedControlThrowable {
       final IoFile f = args.nextUserdata(typeName(), IoFile.class);
+      try {
+        f.checkClosed();
+      } catch (ClosedFileException ex) {
+        throw new LuaRuntimeException(ex);
+      }
       NextLine nextLineFunc = f.nextLine;
       context.getReturnBuffer().setTo(nextLineFunc);
     }
@@ -350,16 +362,25 @@ public abstract class IoFile extends DefaultUserdata {
     protected void invoke(ExecutionContext context, ArgumentIterator args)
         throws ResolvedControlThrowable {
       final IoFile f = args.nextUserdata(typeName(), IoFile.class);
+      // Unless otherwise stated, all I/O functions return nil on failure (plus an error message
+      // as a second result and a system-dependent error code as a third result) and some value
+      // different from nil on success.
+      // See https://www.lua.org/manual/5.3/manual.html
       while (args.hasNext()) {
         final ByteString s = args.nextString();
         try {
           f.write(s);
+        } catch (ClosedFileException ex) {
+          // However, standard Lua 5.3 (checked on MacOS X) interrupts this function when the file
+          // is closed.
+          throw new LuaRuntimeException(ex);
         } catch (Exception ex) {
-          context.getReturnBuffer().setTo(null, ex.getMessage());
+          String errorMessage =
+              Optional.ofNullable(ex.getMessage()).orElse(ex.getClass().getSimpleName());
+          context.getReturnBuffer().setTo(null, errorMessage);
           return;
         }
       }
-
       context.getReturnBuffer().setTo(f);
     }
 

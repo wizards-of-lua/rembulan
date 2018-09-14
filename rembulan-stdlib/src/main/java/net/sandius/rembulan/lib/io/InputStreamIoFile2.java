@@ -51,7 +51,7 @@ public class InputStreamIoFile2 extends IoFile {
 
   @Override
   public boolean isClosed() {
-    return false;
+    return !channel.isOpen();
   }
 
   @Override
@@ -72,6 +72,7 @@ public class InputStreamIoFile2 extends IoFile {
 
   @Override
   public long seek(IoFile.Whence whence, long offset) throws IOException {
+    checkClosed();
     long current = channel.position();
     switch (whence) {
       case BEGINNING:
@@ -92,21 +93,25 @@ public class InputStreamIoFile2 extends IoFile {
 
   @Override
   public String readLine() throws IOException {
+    checkClosed();
     return lineTokenizer.nextToken(channel);
   }
 
   @Override
   public Number readNumber() throws IOException {
+    checkClosed();
     return numberTokenizer.nextToken(channel);
   }
 
   @Override
   public String readRestOfFile() throws IOException {
+    checkClosed();
     return restOfFileTokenizer.nextToken(channel);
   }
 
   @Override
   public String readChunk(long len) throws IOException {
+    checkClosed();
     chunkTokenizer.setLength(len);
     return chunkTokenizer.nextToken(channel);
   }

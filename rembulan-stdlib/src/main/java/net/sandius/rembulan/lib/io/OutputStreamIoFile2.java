@@ -36,7 +36,7 @@ public class OutputStreamIoFile2 extends IoFile {
 
   @Override
   public boolean isClosed() {
-    return false;
+    return !channel.isOpen();
   }
 
   @Override
@@ -47,16 +47,19 @@ public class OutputStreamIoFile2 extends IoFile {
 
   @Override
   public void flush() throws IOException {
+    checkClosed();
     out.flush();
   }
 
   @Override
   public void write(ByteString s) throws IOException {
+    checkClosed();
     s.writeTo(out);
   }
 
   @Override
   public long seek(IoFile.Whence whence, long offset) throws IOException {
+    checkClosed();
     long current = channel.position();
     switch (whence) {
       case BEGINNING:

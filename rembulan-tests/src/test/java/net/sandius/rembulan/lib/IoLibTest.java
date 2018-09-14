@@ -857,7 +857,7 @@ public class IoLibTest extends TestBase {
   }
 
   @Test
-  public void test_File_close__can_not_read_closed_file() throws Exception {
+  public void test_File_close__can_not_read_from_closed_file() throws Exception {
     // Given:
     String content = "123456789a";
     Path path = createTempFile(content);
@@ -866,7 +866,7 @@ public class IoLibTest extends TestBase {
     // When:
     Exception actual = null;
     try {
-      run(program, path.toString(), path);
+      run(program, path.toString());
     } catch (Exception ex) {
       actual = ex;
     }
@@ -874,18 +874,18 @@ public class IoLibTest extends TestBase {
     // Then:
     assertThat(actual).isNotNull();
   }
-  
+
   @Test
-  public void test_File_close__can_not_write_closed_file() throws Exception {
+  public void test_File_close__can_not_write_to_closed_file() throws Exception {
     // Given:
     String content = "123456789a";
     Path path = createTempFilename();
     String program = loadResource("prog18.lua");
-
+    
     // When:
     Exception actual = null;
     try {
-      run(program, path.toString(), path, content);
+      run(program, path.toString(), content);
     } catch (Exception ex) {
       actual = ex;
     }
@@ -893,5 +893,20 @@ public class IoLibTest extends TestBase {
     // Then:
     assertThat(actual).isNotNull();
   }
+
+//  @Test
+//  public void test_File_write__no_flush() throws Exception {
+//    // Given:
+//    String content = "123456789a";
+//    Path path = createTempFilename();
+//    String program = loadResource("prog19.lua");
+//
+//    // When:
+//    run(program, path.toString(), content);
+//
+//    // Then:
+//    String actual = readFile(path);
+//    assertThat(actual).isEqualTo("");
+//  }
 
 }
