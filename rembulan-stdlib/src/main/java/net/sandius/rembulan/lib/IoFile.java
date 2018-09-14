@@ -44,6 +44,19 @@ public abstract class IoFile extends DefaultUserdata {
     return "file (0x" + Integer.toHexString(hashCode()) + ")";
   }
 
+  @Override
+  protected void finalize() throws Throwable {
+    super.finalize();
+    // Note that files are automatically closed when their handles are garbage collected, but that
+    // takes an unpredictable amount of time to happen.
+    // see http://www.lua.org/manual/5.1/manual.html#5.7
+    try {
+      close();
+    } catch (UnsupportedOperationException ex) {
+      // ignore here
+    }
+  }
+
   private NextLine nextLine = new NextLine();
 
   private NextNumber nextNumber = new NextNumber();
