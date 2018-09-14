@@ -520,12 +520,21 @@ public final class IoLib {
           return openFileForRead(path);
         case WRITE:
           return openFileForWrite(path);
+        case APPEND:
+          return openFileForAppend(path);
         default:
           throw new UnsupportedOperationException("open file"); // TODO
       }
     } catch (IOException ex) {
       throw new LuaRuntimeException(ex);
     }
+  }
+
+
+  private InputStreamIoFile2 openFileForRead(Path path) throws IOException {
+    SeekableByteChannel channel = Files.newByteChannel(path, StandardOpenOption.READ);
+    InputStream in = Channels.newInputStream(channel);
+    return new InputStreamIoFile2(in, channel, this.fileMetatable, null);
   }
 
   private IoFile openFileForWrite(Path path) throws IOException {
@@ -535,10 +544,11 @@ public final class IoLib {
     return new OutputStreamIoFile2(out, channel, this.fileMetatable, null);
   }
 
-  private InputStreamIoFile2 openFileForRead(Path path) throws IOException {
-    SeekableByteChannel channel = Files.newByteChannel(path, StandardOpenOption.READ);
-    InputStream in = Channels.newInputStream(channel);
-    return new InputStreamIoFile2(in, channel, this.fileMetatable, null);
+  private IoFile openFileForAppend(Path path) throws IOException {
+    SeekableByteChannel channel =
+        Files.newByteChannel(path, StandardOpenOption.APPEND, StandardOpenOption.CREATE);
+    OutputStream out = Channels.newOutputStream(channel);
+    return new OutputStreamIoFile2(out, channel, this.fileMetatable, null);
   }
 
   private IoFile setDefaultInputFile(IoFile f) {

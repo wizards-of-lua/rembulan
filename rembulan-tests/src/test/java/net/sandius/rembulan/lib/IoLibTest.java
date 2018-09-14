@@ -480,7 +480,7 @@ public class IoLibTest extends TestBase {
     // Then:
     assertThat(actual[0]).isEqualTo("123456789b123456789c");
   }
-  
+
   @Test
   public void test_File_seek_and_read_next_line__Seek_set_0() throws Exception {
     // Given:
@@ -770,7 +770,7 @@ public class IoLibTest extends TestBase {
     String actual = readFile(path);
     assertThat(actual).isEqualTo(expected);
   }
-  
+
   @Test
   public void test_File_write__One_number() throws Exception {
     // Given:
@@ -786,13 +786,13 @@ public class IoLibTest extends TestBase {
     String actual = readFile(path);
     assertThat(actual).isEqualTo(expected);
   }
-  
+
   @Test
   public void test_File_write__Two_numbers() throws Exception {
     // Given:
     int number1 = 1;
     int number2 = 2;
-    String expected = String.valueOf(number1)+String.valueOf(number2);
+    String expected = String.valueOf(number1) + String.valueOf(number2);
     Path path = createTempFilename();
     String program = loadResource("prog13.lua");
 
@@ -803,7 +803,7 @@ public class IoLibTest extends TestBase {
     String actual = readFile(path);
     assertThat(actual).isEqualTo(expected);
   }
-  
+
   @Test
   public void test_File_write_and_seek__Two_strings_set_9() throws Exception {
     // Given:
@@ -815,6 +815,41 @@ public class IoLibTest extends TestBase {
 
     // When:
     run(program, path.toString(), str1, 9, str2);
+
+    // Then:
+    String actual = readFile(path);
+    assertThat(actual).isEqualTo(expected);
+  }
+
+  @Test
+  public void test_File_write_in_append_mode__One_line() throws Exception {
+    // Given:
+    String content = "123456789a";
+    Path path = createTempFile(content);
+    String line = "123456789b";
+    String expected = content + line;
+    String program = loadResource("prog15.lua");
+
+    // When:
+    run(program, path.toString(), line);
+
+    // Then:
+    String actual = readFile(path);
+    assertThat(actual).isEqualTo(expected);
+  }
+
+  @Test
+  public void test_File_seek_and_write_in_append_mode__One_line() throws Exception {
+    // Given:
+    String content = "123456789a";
+    Path path = createTempFile(content);
+    String line = "123456789b";
+    // expect that seek will be ignored!
+    String expected = content + line;
+    String program = loadResource("prog16.lua");
+
+    // When:
+    run(program, path.toString(), line);
 
     // Then:
     String actual = readFile(path);
