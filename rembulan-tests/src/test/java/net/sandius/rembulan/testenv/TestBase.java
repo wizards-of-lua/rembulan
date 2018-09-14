@@ -5,6 +5,7 @@ import java.io.IOException;
 import java.io.PrintStream;
 import java.io.UnsupportedEncodingException;
 import java.net.URISyntaxException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.FileSystems;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -99,11 +100,23 @@ public class TestBase extends Assertions {
     setOut(captureOut);
     return output;
   }
-  
+
   public Path createTempFile(String content) throws IOException {
     Path result = Files.createTempFile(tempDir, "temp", ".txt");
     Files.write(result, content.getBytes());
     return result;
   }
+
+  public Path createTempFilename() throws IOException {
+    Path result = Files.createTempFile(tempDir, "temp", ".txt");
+    deleteFile(result);
+    return result;
+  }
+
+  public String readFile(Path path) throws IOException {
+    byte[] bytes = Files.readAllBytes(path);
+    return new String(bytes, StandardCharsets.UTF_8);
+  }
+
 
 }

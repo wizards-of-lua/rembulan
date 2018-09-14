@@ -1,5 +1,5 @@
 /*
- * Copyright 2016 Michael Karneim
+ * Copyright 2016 Miroslav Janíček
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
  * in compliance with the License. You may obtain a copy of the License at
@@ -11,42 +11,27 @@
  * or implied. See the License for the specific language governing permissions and limitations under
  * the License.
  */
+
 package net.sandius.rembulan.lib.io;
 
 import java.io.IOException;
-import java.io.InputStream;
-import java.nio.ByteBuffer;
-import java.nio.CharBuffer;
+import java.io.OutputStream;
 import java.nio.channels.SeekableByteChannel;
-import java.nio.charset.CharsetDecoder;
-import java.nio.charset.StandardCharsets;
-import java.util.Objects;
 
 import net.sandius.rembulan.ByteString;
 import net.sandius.rembulan.Table;
 import net.sandius.rembulan.lib.IoFile;
 
-public class InputStreamIoFile2 extends IoFile {
+public class OutputStreamIoFile2 extends IoFile {
 
-  private final ByteBuffer byteBuffer = ByteBuffer.wrap(new byte[64]);
-  private final CharsetDecoder decoder = StandardCharsets.UTF_8.newDecoder();
-  private final CharBuffer charBuffer = CharBuffer.wrap(new char[16]);
-
-  private final NumberTokenizer numberTokenizer =
-      new NumberTokenizer(byteBuffer, decoder, charBuffer);
-  private final LineTokenizer lineTokenizer = new LineTokenizer(byteBuffer, decoder, charBuffer);
-  private final RestOfFileTokenizer restOfFileTokenizer =
-      new RestOfFileTokenizer(byteBuffer, decoder, charBuffer);
-  private final ChunkTokenizer chunkTokenizer = new ChunkTokenizer(byteBuffer, decoder, charBuffer);
-
-  private final InputStream in;
+  private final OutputStream out;
   private final SeekableByteChannel channel;
 
-  public InputStreamIoFile2(InputStream in, SeekableByteChannel channel, Table metatable,
+  public OutputStreamIoFile2(OutputStream out, SeekableByteChannel channel, Table metatable,
       Object userValue) {
     super(metatable, userValue);
-    this.in = Objects.requireNonNull(in);
-    this.channel = Objects.requireNonNull(channel);
+    this.out = out;
+    this.channel = channel;
   }
 
   @Override
@@ -56,18 +41,18 @@ public class InputStreamIoFile2 extends IoFile {
 
   @Override
   public void close() throws IOException {
-    in.close();
+    out.close();
     channel.close();
   }
 
   @Override
   public void flush() throws IOException {
-    // no-op
+    out.flush();
   }
 
   @Override
   public void write(ByteString s) throws IOException {
-    throw new UnsupportedOperationException("Bad file descriptor");
+    s.writeTo(out);
   }
 
   @Override
@@ -92,23 +77,22 @@ public class InputStreamIoFile2 extends IoFile {
 
   @Override
   public String readLine() throws IOException {
-    return lineTokenizer.nextToken(channel);
+    throw new UnsupportedOperationException("Bad file descriptor");
   }
 
   @Override
   public Number readNumber() throws IOException {
-    return numberTokenizer.nextToken(channel);
+    throw new UnsupportedOperationException("Bad file descriptor");
   }
 
   @Override
   public String readRestOfFile() throws IOException {
-    return restOfFileTokenizer.nextToken(channel);
+    throw new UnsupportedOperationException("Bad file descriptor");
   }
 
   @Override
   public String readChunk(long len) throws IOException {
-    chunkTokenizer.setLength(len);
-    return chunkTokenizer.nextToken(channel);
+    throw new UnsupportedOperationException("Bad file descriptor");
   }
 
 }

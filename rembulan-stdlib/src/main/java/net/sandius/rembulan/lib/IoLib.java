@@ -60,6 +60,7 @@ import net.sandius.rembulan.impl.UnimplementedFunction;
 import net.sandius.rembulan.lib.io.InputStreamIoFile;
 import net.sandius.rembulan.lib.io.InputStreamIoFile2;
 import net.sandius.rembulan.lib.io.OutputStreamIoFile;
+import net.sandius.rembulan.lib.io.OutputStreamIoFile2;
 import net.sandius.rembulan.runtime.Dispatch;
 import net.sandius.rembulan.runtime.ExecutionContext;
 import net.sandius.rembulan.runtime.LuaFunction;
@@ -516,9 +517,9 @@ public final class IoLib {
     try {
       switch (mode) {
         case READ:
-          SeekableByteChannel channel = Files.newByteChannel(path, StandardOpenOption.READ);
-          InputStream in = Channels.newInputStream(channel);
-          return new InputStreamIoFile2(in, channel, this.fileMetatable, null);
+          return openFileForRead(path);
+        case WRITE:
+          return openFileForWrite(path);
         default:
           throw new UnsupportedOperationException("open file"); // TODO
       }
@@ -527,7 +528,18 @@ public final class IoLib {
     }
   }
 
+  private IoFile openFileForWrite(Path path) throws IOException {
+    SeekableByteChannel channel =
+        Files.newByteChannel(path, StandardOpenOption.WRITE, StandardOpenOption.CREATE);
+    OutputStream out = Channels.newOutputStream(channel);
+    return new OutputStreamIoFile2(out, channel, this.fileMetatable, null);
+  }
 
+  private InputStreamIoFile2 openFileForRead(Path path) throws IOException {
+    SeekableByteChannel channel = Files.newByteChannel(path, StandardOpenOption.READ);
+    InputStream in = Channels.newInputStream(channel);
+    return new InputStreamIoFile2(in, channel, this.fileMetatable, null);
+  }
 
   private IoFile setDefaultInputFile(IoFile f) {
     defaultInput = Objects.requireNonNull(f);
