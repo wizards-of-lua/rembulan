@@ -894,19 +894,105 @@ public class IoLibTest extends TestBase {
     assertThat(actual).isNotNull();
   }
 
-//  @Test
-//  public void test_File_write__no_flush() throws Exception {
-//    // Given:
-//    String content = "123456789a";
-//    Path path = createTempFilename();
-//    String program = loadResource("prog19.lua");
-//
-//    // When:
-//    run(program, path.toString(), content);
-//
-//    // Then:
-//    String actual = readFile(path);
-//    assertThat(actual).isEqualTo("");
-//  }
+  @Test 
+  public void test_File_write__bytes() throws Exception {
+    // Given:
+    String input = "0,1,2,3";
+    Path path = createTempFilename();
+    String program = loadResource("prog20.lua");
+    
+    // When:
+    run(program, path.toString(), input);
+    
+    // Then:
+    byte[] actual = readBinaryFile(path);
+    assertThat(actual).isEqualTo(new byte[] {0,1,2,3});
+  }
+  
+  @Test 
+  public void test_File_write__bytes_with_utf8_a_umlaut() throws Exception {
+    // Given:
+    String input = "195,164";
+    Path path = createTempFilename();
+    String program = loadResource("prog20.lua");
+    
+    // When:
+    run(program, path.toString(), input);
+    
+    // Then:
+    String actual = readFile(path);
+    assertThat(actual).isEqualTo("ä");
+  }
+  
+  @Test 
+  public void test_File_write__bytes_with_chinese_symbol() throws Exception {
+    // Given:
+    String input = "231,154,132";
+    Path path = createTempFilename();
+    String program = loadResource("prog20.lua");
+    
+    // When:
+    run(program, path.toString(), input);
+    
+    // Then:
+    String actual = readFile(path);
+    assertThat(actual).isEqualTo("\u7684");
+  }
+  
+  @Test 
+  public void test_File_read__bytes() throws Exception {
+    // Given:
+    byte[] content = new byte[] {0,1,2,3};
+    Path path = createTempBinaryFile(content);
+    String program = loadResource("prog21.lua");
+    
+    // When:
+    Object[] actual = run(program, path.toString());
+    
+    // Then:
+    assertThat(actual[0]).isEqualTo("0,1,2,3");
+  }
+  
+  @Test 
+  public void test_File_read__bytes_with_utf8_a_umlaut() throws Exception {
+    // Given:
+    String content = "ä";
+    Path path = createTempFile(content);
+    String program = loadResource("prog21.lua");
+    
+    // When:
+    Object[] actual = run(program, path.toString());
+    
+    // Then:
+    assertThat(actual[0]).isEqualTo("195,164");
+  }
+  
+  @Test 
+  public void test_File_read__bytes_with_utf8_chinese_symbol() throws Exception {
+    // Given:
+    String content = "\u7684";
+    Path path = createTempFile(content);
+    String program = loadResource("prog21.lua");
+    
+    // When:
+    Object[] actual = run(program, path.toString());
+    
+    // Then:
+    assertThat(actual[0]).isEqualTo("231,154,132");
+  }
+  
+  @Test 
+  public void test_File_seek_and_read__bytes_with_utf8_chinese_symbol() throws Exception {
+    // Given:
+    String content = "\u7684";
+    Path path = createTempFile(content);
+    String program = loadResource("prog22.lua");
+    
+    // When:
+    Object[] actual = run(program, path.toString(), "1");
+    
+    // Then:
+    assertThat(actual[0]).isEqualTo("154,132");
+  }
 
 }

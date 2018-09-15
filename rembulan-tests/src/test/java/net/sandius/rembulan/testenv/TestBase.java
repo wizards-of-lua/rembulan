@@ -107,6 +107,12 @@ public class TestBase extends Assertions {
     return result;
   }
 
+  public Path createTempBinaryFile(byte[] content) throws IOException {
+    Path result = Files.createTempFile(tempDir, "temp", ".txt");
+    Files.write(result, content);
+    return result;
+  }
+
   public Path createTempFilename() throws IOException {
     Path result = Files.createTempFile(tempDir, "temp", ".txt");
     deleteFile(result);
@@ -118,5 +124,8 @@ public class TestBase extends Assertions {
     return new String(bytes, StandardCharsets.UTF_8);
   }
 
+  public byte[] readBinaryFile(Path path) throws IOException {
+    return Files.readAllBytes(path);
+  }
 
 }
