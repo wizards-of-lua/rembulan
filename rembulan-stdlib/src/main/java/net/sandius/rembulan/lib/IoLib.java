@@ -523,13 +523,14 @@ public final class IoLib {
         case APPEND:
           return openFileForAppend(path);
         default:
-          throw new UnsupportedOperationException("open file"); // TODO
+          // TODO
+          throw new UnsupportedOperationException(
+              "open file with mode " + mode + " is not supported right now");
       }
     } catch (IOException ex) {
       throw new LuaRuntimeException(ex);
     }
   }
-
 
   private InputStreamIoFile2 openFileForRead(Path path) throws IOException {
     SeekableByteChannel channel = Files.newByteChannel(path, StandardOpenOption.READ);
@@ -675,6 +676,8 @@ public final class IoLib {
     public Lines(IoLib lib) {
       super("io.lines");
     }
+    // TODO close file after this function ends
+    // see http://www.lua.org/manual/5.3/manual.html#6.8
   }
 
   static class Open extends AbstractLibFunction {

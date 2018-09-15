@@ -466,6 +466,36 @@ public class IoLibTest extends TestBase {
     assertThat(actual[0]).isEqualTo(null);
     assertThat(actual[1]).isEqualTo("bbbb   ");
   }
+  
+  @Test
+  public void test_File_read_next_two_numbers__Read_file_with_numbers_separated_by_comma()
+      throws Exception {
+    // Given:
+    String content = "1,2,3,4,5,6";
+    Path path = createTempFile(content);
+    String program = loadResource("prog19.lua");
+
+    // When:
+    Object[] actual = run(program, path.toString());
+
+    // Then:
+    assertThat(actual[0]).isEqualTo(1L);    
+  }
+  
+  @Test
+  public void test_File_read_next_two_numbers__Read_file_with_numbers_separated_by_space()
+      throws Exception {
+    // Given:
+    String content = "1 2 3 4 5 6";
+    Path path = createTempFile(content);
+    String program = loadResource("prog19.lua");
+
+    // When:
+    Object[] actual = run(program, path.toString());
+
+    // Then:
+    assertThat(actual[0]).isEqualTo(21L);    
+  }
 
   @Test
   public void test_File_seek_and_read_next_line__Seek_set_10() throws Exception {

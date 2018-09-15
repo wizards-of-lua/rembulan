@@ -59,7 +59,8 @@ public abstract class AbstractTokenizer<R> {
       return null;
     } else {
       byte[] bytes = output.toByteArray();
-      return toResult(bytes);
+      R result = toResult(bytes);
+      return result;
     }
   }
 

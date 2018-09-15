@@ -15,6 +15,8 @@
 package net.sandius.rembulan.lib;
 
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
 
 import net.sandius.rembulan.ByteString;
@@ -26,10 +28,15 @@ import net.sandius.rembulan.impl.NonsuspendableFunctionException;
 import net.sandius.rembulan.runtime.AbstractFunctionAnyArg;
 import net.sandius.rembulan.runtime.ExecutionContext;
 import net.sandius.rembulan.runtime.ResolvedControlThrowable;
+import net.sandius.rembulan.runtime.ReturnBuffer;
 
 /**
  * A file handle used by the {@link IoLib I/O library}.
  */
+// Unless otherwise stated, all I/O functions return nil on failure (plus an error message
+// as a second result and a system-dependent error code as a third result) and some value
+// different from nil on success.
+// See https://www.lua.org/manual/5.3/manual.html
 public abstract class IoFile extends DefaultUserdata {
 
   protected IoFile(Table metatable, Object userValue) {
@@ -64,9 +71,13 @@ public abstract class IoFile extends DefaultUserdata {
     }
   }
 
-  private NextLine nextLine = new NextLine();
+  protected static void setErrorMessage(ReturnBuffer buffer, Exception ex) {
+    String errorMessage =
+        Optional.ofNullable(ex.getMessage()).orElse(ex.getClass().getSimpleName());
+    buffer.setTo(null, errorMessage);
+  }
 
-  private NextNumber nextNumber = new NextNumber();
+  private NextLine nextLine = new NextLine();
 
   public abstract boolean isClosed();
 
@@ -113,46 +124,13 @@ public abstract class IoFile extends DefaultUserdata {
 
   class NextLine extends AbstractFunctionAnyArg {
 
+    private Read READ = new Read();
+
     public NextLine() {}
 
     @Override
     public void invoke(ExecutionContext context, Object[] args) throws ResolvedControlThrowable {
-      try {
-        ByteString line = readLine();
-        if (line == null) {
-          context.getReturnBuffer().setTo();
-        } else {
-          context.getReturnBuffer().setTo(line);
-        }
-      } catch (IOException ex) {
-        throw new LuaRuntimeException(ex);
-      }
-    }
-
-    @Override
-    public void resume(ExecutionContext context, Object suspendedState)
-        throws ResolvedControlThrowable {
-      throw new NonsuspendableFunctionException(this.getClass());
-    }
-
-  }
-
-  class NextNumber extends AbstractFunctionAnyArg {
-
-    public NextNumber() {}
-
-    @Override
-    public void invoke(ExecutionContext context, Object[] args) throws ResolvedControlThrowable {
-      try {
-        Number number = readNumber();
-        if (number == null) {
-          context.getReturnBuffer().setTo();
-        } else {
-          context.getReturnBuffer().setTo(number);
-        }
-      } catch (IOException ex) {
-        throw new LuaRuntimeException(ex);
-      }
+      READ.invoke(context, IoFile.this);
     }
 
     @Override
@@ -180,11 +158,12 @@ public abstract class IoFile extends DefaultUserdata {
 
       try {
         f.close();
+      } catch (ClosedFileException ex) {
+        throw new LuaRuntimeException(ex);
       } catch (Exception ex) {
-        context.getReturnBuffer().setTo(null, ex.getMessage());
+        setErrorMessage(context.getReturnBuffer(), ex);
         return;
       }
-
       context.getReturnBuffer().setTo(true);
     }
 
@@ -203,11 +182,12 @@ public abstract class IoFile extends DefaultUserdata {
       final IoFile f = args.nextUserdata(typeName(), IoFile.class);
       try {
         f.flush();
+      } catch (ClosedFileException ex) {
+        throw new LuaRuntimeException(ex);
       } catch (Exception ex) {
-        context.getReturnBuffer().setTo(null, ex.getMessage());
+        setErrorMessage(context.getReturnBuffer(), ex);
         return;
       }
-
       context.getReturnBuffer().setTo(true);
     }
 
@@ -228,6 +208,9 @@ public abstract class IoFile extends DefaultUserdata {
         f.checkClosed();
       } catch (ClosedFileException ex) {
         throw new LuaRuntimeException(ex);
+      } catch (Exception ex) {
+        setErrorMessage(context.getReturnBuffer(), ex);
+        return;
       }
       NextLine nextLineFunc = f.nextLine;
       context.getReturnBuffer().setTo(nextLineFunc);
@@ -248,37 +231,41 @@ public abstract class IoFile extends DefaultUserdata {
     protected void invoke(ExecutionContext context, ArgumentIterator args)
         throws ResolvedControlThrowable {
       final IoFile f = args.nextUserdata(typeName(), IoFile.class);
-      Object formatSpecfifier = args.nextOptionalAny(DEFAULT_SPEC);
-      Format format = Format.get(formatSpecfifier);
-      switch (format) {
-        case NEXT_LINE:
-          f.nextLine.invoke(context);
-          return;
-        case AS_NUMBER:
-          f.nextNumber.invoke(context);
-          return;
-        case WHOLE_FILE:
-          try {
-            ByteString result = f.readRestOfFile();
-            context.getReturnBuffer().setTo(result);
-          } catch (IOException ex) {
-            throw new LuaRuntimeException(ex);
+      List<Object> result = new ArrayList<>();
+      try {
+        do {
+          Object formatSpecfifier = args.nextOptionalAny(DEFAULT_SPEC);
+          Format format = Format.get(formatSpecfifier);
+          switch (format) {
+            case NEXT_LINE:
+              ByteString line = f.readLine();
+              result.add(line);
+              break;
+            case AS_NUMBER:
+              Number number = f.readNumber();
+              result.add(number);
+              break;
+            case WHOLE_FILE:
+              ByteString text = f.readRestOfFile();
+              result.add(text);
+              break;
+            case NUMBER_OF_CHARACTERS:
+              Long len = Conversions.integerValueOf(formatSpecfifier);
+              ByteString chunk = f.readChunk(len);
+              result.add(chunk);
+              break;
+            default:
+              throw new UnsupportedOperationException("Unsupported format: " + format);
           }
-          return;
-        case NUMBER_OF_CHARACTERS:
-          Long len = Conversions.integerValueOf(formatSpecfifier);
-          try {
-            ByteString result = f.readChunk(len);
-            context.getReturnBuffer().setTo(result);
-          } catch (IOException ex) {
-            throw new LuaRuntimeException(ex);
-          }
-          return;
-        default:
-          throw new UnsupportedOperationException("Unsupported format: " + format);
+        } while (args.hasNext());
+      } catch (ClosedFileException ex) {
+        throw new LuaRuntimeException(ex);
+      } catch (Exception ex) {
+        setErrorMessage(context.getReturnBuffer(), ex);
+        return;
       }
+      context.getReturnBuffer().setToContentsOf(result);
     }
-
   }
 
   static class Seek extends AbstractLibFunction {
@@ -326,8 +313,10 @@ public abstract class IoFile extends DefaultUserdata {
       final long position;
       try {
         position = file.seek(whence, offset);
+      } catch (ClosedFileException ex) {
+        throw new LuaRuntimeException(ex);
       } catch (Exception ex) {
-        context.getReturnBuffer().setTo(null, ex.getMessage());
+        setErrorMessage(context.getReturnBuffer(), ex);
         return;
       }
 
@@ -362,22 +351,17 @@ public abstract class IoFile extends DefaultUserdata {
     protected void invoke(ExecutionContext context, ArgumentIterator args)
         throws ResolvedControlThrowable {
       final IoFile f = args.nextUserdata(typeName(), IoFile.class);
-      // Unless otherwise stated, all I/O functions return nil on failure (plus an error message
-      // as a second result and a system-dependent error code as a third result) and some value
-      // different from nil on success.
-      // See https://www.lua.org/manual/5.3/manual.html
+
       while (args.hasNext()) {
         final ByteString s = args.nextString();
         try {
           f.write(s);
         } catch (ClosedFileException ex) {
-          // However, standard Lua 5.3 (checked on MacOS X) interrupts this function when the file
+          // Standard Lua 5.3 (checked on MacOS X) interrupts this function when the file
           // is closed.
           throw new LuaRuntimeException(ex);
         } catch (Exception ex) {
-          String errorMessage =
-              Optional.ofNullable(ex.getMessage()).orElse(ex.getClass().getSimpleName());
-          context.getReturnBuffer().setTo(null, errorMessage);
+          setErrorMessage(context.getReturnBuffer(), ex);
           return;
         }
       }
@@ -401,8 +385,6 @@ public abstract class IoFile extends DefaultUserdata {
     }
 
   }
-
-
 
 }
 
