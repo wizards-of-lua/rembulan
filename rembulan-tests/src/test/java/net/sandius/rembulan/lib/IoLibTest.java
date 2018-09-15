@@ -989,7 +989,7 @@ public class IoLibTest extends TestBase {
     String program = loadResource("prog22.lua");
     
     // When:
-    Object[] actual = run(program, path.toString(), "1");
+    Object[] actual = run(program, path.toString(), 1);
     
     // Then:
     assertThat(actual[0]).isEqualTo("154,132");

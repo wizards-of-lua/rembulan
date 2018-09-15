@@ -1,32 +1,32 @@
 package net.sandius.rembulan.lib.io;
 
 import java.nio.ByteBuffer;
-import java.nio.CharBuffer;
-import java.nio.charset.CharsetDecoder;
 
-public class LineTokenizer extends AbstractTokenizer<String> {
+import net.sandius.rembulan.ByteString;
 
-  public LineTokenizer(ByteBuffer byteBuffer, CharsetDecoder decoder, CharBuffer charBuffer) {
-    super(byteBuffer, decoder, charBuffer);
+public class LineTokenizer extends AbstractTokenizer<ByteString> {
+
+  public LineTokenizer(ByteBuffer byteBuffer) {
+    super(byteBuffer);
   }
 
   @Override
   protected void reset() {}
 
   @Override
-  protected boolean handleChar(char ch) {
-    if (ch == LINE_FEED) {
+  protected boolean handleByte(byte b) {
+    if (b == LINE_FEED) {
       skip++;
       return false;
     } else {
-      builder.append(ch);
+      output.write(b);
     }
     return true;
   }
 
   @Override
-  protected String toResult(String text) {
-    return text;
+  protected ByteString toResult(byte[] bytes) {
+    return ByteString.copyOf(bytes);
   }
 
 }

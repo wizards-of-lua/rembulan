@@ -76,13 +76,13 @@ public abstract class IoFile extends DefaultUserdata {
 
   public abstract void write(ByteString s) throws IOException;
 
-  public abstract String readLine() throws IOException;
+  public abstract ByteString readLine() throws IOException;
 
   public abstract Number readNumber() throws IOException;
 
-  public abstract String readRestOfFile() throws IOException;
+  public abstract ByteString readRestOfFile() throws IOException;
 
-  public abstract String readChunk(long len) throws IOException;
+  public abstract ByteString readChunk(long len) throws IOException;
 
   public enum Whence {
     BEGINNING, CURRENT_POSITION, END
@@ -118,11 +118,11 @@ public abstract class IoFile extends DefaultUserdata {
     @Override
     public void invoke(ExecutionContext context, Object[] args) throws ResolvedControlThrowable {
       try {
-        String line = readLine();
+        ByteString line = readLine();
         if (line == null) {
           context.getReturnBuffer().setTo();
         } else {
-          context.getReturnBuffer().setTo(ByteString.of(line));
+          context.getReturnBuffer().setTo(line);
         }
       } catch (IOException ex) {
         throw new LuaRuntimeException(ex);
@@ -259,7 +259,7 @@ public abstract class IoFile extends DefaultUserdata {
           return;
         case WHOLE_FILE:
           try {
-            String result = f.readRestOfFile();
+            ByteString result = f.readRestOfFile();
             context.getReturnBuffer().setTo(result);
           } catch (IOException ex) {
             throw new LuaRuntimeException(ex);
@@ -268,7 +268,7 @@ public abstract class IoFile extends DefaultUserdata {
         case NUMBER_OF_CHARACTERS:
           Long len = Conversions.integerValueOf(formatSpecfifier);
           try {
-            String result = f.readChunk(len);
+            ByteString result = f.readChunk(len);
             context.getReturnBuffer().setTo(result);
           } catch (IOException ex) {
             throw new LuaRuntimeException(ex);

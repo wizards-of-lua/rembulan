@@ -1,8 +1,6 @@
 package net.sandius.rembulan.lib.io;
 
 import java.nio.ByteBuffer;
-import java.nio.CharBuffer;
-import java.nio.charset.CharsetDecoder;
 
 import net.sandius.rembulan.ByteString;
 import net.sandius.rembulan.Conversions;
@@ -13,8 +11,8 @@ public class NumberTokenizer extends AbstractTokenizer<Number> {
   boolean hasE = false;
   boolean trailing = false;
 
-  public NumberTokenizer(ByteBuffer byteBuffer, CharsetDecoder decoder, CharBuffer charBuffer) {
-    super(byteBuffer, decoder, charBuffer);
+  public NumberTokenizer(ByteBuffer byteBuffer) {
+    super(byteBuffer);
   }
 
   @Override
@@ -25,12 +23,12 @@ public class NumberTokenizer extends AbstractTokenizer<Number> {
   }
 
   @Override
-  protected boolean handleChar(char ch) {
-    if (ch == LINE_FEED) {
+  protected boolean handleByte(byte b) {
+    if (b == LINE_FEED) {
       skip++;
       return false;
-    } else if (Character.isWhitespace(ch)) {
-      if (builder.length() > 0) {
+    } else if (Character.isWhitespace(b)) {
+      if (output.size() > 0) {
         trailing = true;
       }
       skip++;
@@ -39,12 +37,12 @@ public class NumberTokenizer extends AbstractTokenizer<Number> {
         return false;
       } else {
         // todo minus sign! one at the beginning, one after the e
-        if (Character.isDigit(ch)) {
-          builder.append(ch);
-        } else if ('.' == ch && hasDot == false) {
-          builder.append(ch);
-        } else if ('e' == ch && hasE == false) {
-          builder.append(ch);
+        if (Character.isDigit(b)) {
+          output.write(b);
+        } else if ('.' == b && hasDot == false) {
+          output.write(b);
+        } else if ('e' == b && hasE == false) {
+          output.write(b);
         } else {
           return false;
         }
@@ -54,10 +52,8 @@ public class NumberTokenizer extends AbstractTokenizer<Number> {
   }
 
   @Override
-  protected Number toResult(String text) {
-    return Conversions.numericalValueOf(ByteString.of(text));
+  protected Number toResult(byte[] bytes) {
+    return Conversions.numericalValueOf(ByteString.copyOf(bytes));
   }
-
-
 
 }

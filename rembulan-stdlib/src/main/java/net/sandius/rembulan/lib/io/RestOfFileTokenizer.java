@@ -1,27 +1,27 @@
 package net.sandius.rembulan.lib.io;
 
 import java.nio.ByteBuffer;
-import java.nio.CharBuffer;
-import java.nio.charset.CharsetDecoder;
 
-public class RestOfFileTokenizer extends AbstractTokenizer<String> {
+import net.sandius.rembulan.ByteString;
 
-  public RestOfFileTokenizer(ByteBuffer byteBuffer, CharsetDecoder decoder, CharBuffer charBuffer) {
-    super(byteBuffer, decoder, charBuffer);
+public class RestOfFileTokenizer extends AbstractTokenizer<ByteString> {
+
+  public RestOfFileTokenizer(ByteBuffer byteBuffer) {
+    super(byteBuffer);
   }
 
   @Override
   protected void reset() {}
 
   @Override
-  protected boolean handleChar(char ch) {
-    builder.append(ch);
+  protected boolean handleByte(byte b) {
+    output.write(b);
     return true;
   }
 
   @Override
-  protected String toResult(String text) {
-    return text;
+  protected ByteString toResult(byte[] bytes) {
+    return ByteString.copyOf(bytes);
   }
 
 }

@@ -1,16 +1,16 @@
 package net.sandius.rembulan.lib.io;
 
 import java.nio.ByteBuffer;
-import java.nio.CharBuffer;
-import java.nio.charset.CharsetDecoder;
 
-public class ChunkTokenizer extends AbstractTokenizer<String> {
+import net.sandius.rembulan.ByteString;
+
+public class ChunkTokenizer extends AbstractTokenizer<ByteString> {
 
   private long length;
   private long count;
 
-  public ChunkTokenizer(ByteBuffer byteBuffer, CharsetDecoder decoder, CharBuffer charBuffer) {
-    super(byteBuffer, decoder, charBuffer);
+  public ChunkTokenizer(ByteBuffer byteBuffer) {
+    super(byteBuffer);
   }
 
   public void setLength(long length) {
@@ -23,20 +23,20 @@ public class ChunkTokenizer extends AbstractTokenizer<String> {
   }
 
   @Override
-  protected boolean handleChar(char ch) {
+  protected boolean handleByte(byte b) {
     count++;
     if (count <= length) {
-      builder.append(ch);
+      output.write(b);
     }
     if (count > length) {
-      skip++;      
+      skip++;
     }
     return count < length;
   }
 
   @Override
-  protected String toResult(String text) {
-    return text;
+  protected ByteString toResult(byte[] bytes) {
+    return ByteString.copyOf(bytes);
   }
 
 }
