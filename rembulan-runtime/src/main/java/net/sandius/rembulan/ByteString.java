@@ -16,8 +16,7 @@
 
 package net.sandius.rembulan;
 
-import net.sandius.rembulan.util.ByteIterator;
-
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -25,6 +24,8 @@ import java.nio.ByteBuffer;
 import java.nio.charset.Charset;
 import java.util.Arrays;
 import java.util.Objects;
+
+import net.sandius.rembulan.util.ByteIterator;
 
 /**
  * Byte string, an immutable sequence of bytes.
@@ -81,6 +82,19 @@ public abstract class ByteString implements Comparable<ByteString> {
 	 */
 	public static ByteString of(String s) {
 		return of(s, Charset.defaultCharset());
+	}
+	
+	/**
+     * Returns a {@link ByteString} containing a copy of the byte array provided by the given
+     * {@code byteStream's} {@link ByteArrayOutputStream#toByteArray()}  method.
+     *
+     * @param byteStream  must not be {@code null}
+     * @return  a byte string containing a copy of th bytes
+     *
+     * @throws NullPointerException  if {@code byteStream} is {@code null}
+     */
+	public static ByteString of(ByteArrayOutputStream byteStream) {
+	  return wrap(byteStream.toByteArray());
 	}
 
 	/**
