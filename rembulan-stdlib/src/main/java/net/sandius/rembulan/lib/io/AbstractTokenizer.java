@@ -58,8 +58,8 @@ public abstract class AbstractTokenizer<R> {
     if (output.size() == 0 && skip == 0) {
       return null;
     } else {
-      byte[] bytes = output.toByteArray();
-      R result = toResult(bytes);
+      //byte[] bytes = output.toByteArray();
+      R result = toResult();
       return result;
     }
   }
@@ -68,6 +68,6 @@ public abstract class AbstractTokenizer<R> {
 
   protected abstract boolean handleByte(byte b);
 
-  protected abstract R toResult(byte[] bytes);
+  protected abstract R toResult();
 
 }

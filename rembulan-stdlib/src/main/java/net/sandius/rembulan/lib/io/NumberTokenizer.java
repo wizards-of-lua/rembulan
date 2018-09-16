@@ -52,8 +52,8 @@ public class NumberTokenizer extends AbstractTokenizer<Number> {
   }
 
   @Override
-  protected Number toResult(byte[] bytes) {
-    return Conversions.numericalValueOf(ByteString.copyOf(bytes));
+  protected Number toResult() {
+    return Conversions.numericalValueOf(ByteString.of(output));
   }
 
 }

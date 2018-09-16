@@ -671,13 +671,24 @@ public final class IoLib {
 
   }
 
+  /**
+   * Opens the given file name in read mode and returns an iterator function that works like
+   * file:lines(···) over the opened file. When the iterator function detects the end of file, it
+   * returns no values (to finish the loop) and automatically closes the file.
+   * 
+   * The call io.lines() (with no file name) is equivalent to io.input():lines("*l"); that is, it
+   * iterates over the lines of the default input file. In this case, the iterator does not close
+   * the file when the loop ends.
+   * 
+   * In case of errors this function raises the error, instead of returning an error code.
+   * 
+   * @see http://www.lua.org/manual/5.3/manual.html#6.8
+   */
   static class Lines extends UnimplementedFunction {
     // TODO
     public Lines(IoLib lib) {
       super("io.lines");
     }
-    // TODO close file after this function ends
-    // see http://www.lua.org/manual/5.3/manual.html#6.8
   }
 
   static class Open extends AbstractLibFunction {

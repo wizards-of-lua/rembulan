@@ -25,8 +25,8 @@ public class LineTokenizer extends AbstractTokenizer<ByteString> {
   }
 
   @Override
-  protected ByteString toResult(byte[] bytes) {
-    return ByteString.copyOf(bytes);
+  protected ByteString toResult() {
+    return ByteString.of(output);
   }
 
 }
