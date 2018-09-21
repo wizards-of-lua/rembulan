@@ -17,7 +17,6 @@ package net.sandius.rembulan.lib;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Optional;
 
 import net.sandius.rembulan.ByteString;
 import net.sandius.rembulan.Conversions;
@@ -69,12 +68,6 @@ public abstract class IoFile extends DefaultUserdata {
     if (isClosed()) {
       throw new ClosedFileException();
     }
-  }
-
-  protected static void setErrorMessage(ReturnBuffer buffer, Exception ex) {
-    String errorMessage =
-        Optional.ofNullable(ex.getMessage()).orElse(ex.getClass().getSimpleName());
-    buffer.setTo(null, errorMessage);
   }
 
   private NextLine nextLine = new NextLine();
@@ -161,7 +154,7 @@ public abstract class IoFile extends DefaultUserdata {
       } catch (ClosedFileException ex) {
         throw new LuaRuntimeException(ex);
       } catch (Exception ex) {
-        setErrorMessage(context.getReturnBuffer(), ex);
+        IoLib.setErrorMessage(context.getReturnBuffer(), ex);
         return;
       }
       context.getReturnBuffer().setTo(true);
@@ -185,7 +178,7 @@ public abstract class IoFile extends DefaultUserdata {
       } catch (ClosedFileException ex) {
         throw new LuaRuntimeException(ex);
       } catch (Exception ex) {
-        setErrorMessage(context.getReturnBuffer(), ex);
+        IoLib.setErrorMessage(context.getReturnBuffer(), ex);
         return;
       }
       context.getReturnBuffer().setTo(true);
@@ -209,7 +202,7 @@ public abstract class IoFile extends DefaultUserdata {
       } catch (ClosedFileException ex) {
         throw new LuaRuntimeException(ex);
       } catch (Exception ex) {
-        setErrorMessage(context.getReturnBuffer(), ex);
+        IoLib.setErrorMessage(context.getReturnBuffer(), ex);
         return;
       }
       NextLine nextLineFunc = f.nextLine;
@@ -261,7 +254,7 @@ public abstract class IoFile extends DefaultUserdata {
       } catch (ClosedFileException ex) {
         throw new LuaRuntimeException(ex);
       } catch (Exception ex) {
-        setErrorMessage(context.getReturnBuffer(), ex);
+        IoLib.setErrorMessage(context.getReturnBuffer(), ex);
         return;
       }
       context.getReturnBuffer().setToContentsOf(result);
@@ -316,7 +309,7 @@ public abstract class IoFile extends DefaultUserdata {
       } catch (ClosedFileException ex) {
         throw new LuaRuntimeException(ex);
       } catch (Exception ex) {
-        setErrorMessage(context.getReturnBuffer(), ex);
+        IoLib.setErrorMessage(context.getReturnBuffer(), ex);
         return;
       }
 
@@ -361,7 +354,7 @@ public abstract class IoFile extends DefaultUserdata {
           // is closed.
           throw new LuaRuntimeException(ex);
         } catch (Exception ex) {
-          setErrorMessage(context.getReturnBuffer(), ex);
+          IoLib.setErrorMessage(context.getReturnBuffer(), ex);
           return;
         }
       }

@@ -43,6 +43,7 @@ import java.nio.channels.Channels;
 import java.nio.channels.SeekableByteChannel;
 import java.nio.file.FileSystem;
 import java.nio.file.Files;
+import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
@@ -50,7 +51,6 @@ import java.util.Arrays;
 import java.util.Objects;
 
 import net.sandius.rembulan.ByteString;
-import net.sandius.rembulan.LuaRuntimeException;
 import net.sandius.rembulan.Metatables;
 import net.sandius.rembulan.StateContext;
 import net.sandius.rembulan.Table;
@@ -65,6 +65,7 @@ import net.sandius.rembulan.runtime.Dispatch;
 import net.sandius.rembulan.runtime.ExecutionContext;
 import net.sandius.rembulan.runtime.LuaFunction;
 import net.sandius.rembulan.runtime.ResolvedControlThrowable;
+import net.sandius.rembulan.runtime.ReturnBuffer;
 import net.sandius.rembulan.runtime.UnresolvedControlThrowable;
 
 /**
@@ -390,6 +391,12 @@ public final class IoLib {
     return FILE_WRITE;
   }
 
+  static void setErrorMessage(ReturnBuffer buffer, Exception ex) {
+    String exceptionName = ex.getClass().getSimpleName();
+    String exceptionMessage = ex.getMessage();
+    String errorMessage = exceptionName + (exceptionMessage == null ? "" : ": " + exceptionMessage);
+    buffer.setTo(null, errorMessage);
+  }
 
   private final LuaFunction _close;
   private final LuaFunction _flush;
@@ -504,7 +511,7 @@ public final class IoLib {
   }
 
 
-  private IoFile openFile(ByteString filename, Open.Mode mode) {
+  private IoFile openFile(ByteString filename, Open.Mode mode) throws IOException {
     Objects.requireNonNull(filename);
     Objects.requireNonNull(mode);
 
@@ -527,8 +534,8 @@ public final class IoLib {
           throw new UnsupportedOperationException(
               "open file with mode " + mode + " is not supported right now");
       }
-    } catch (IOException ex) {
-      throw new LuaRuntimeException(ex);
+    } catch (NoSuchFileException ex) {
+      throw new NoSuchFileException(filename.toString());
     }
   }
 
@@ -657,11 +664,16 @@ public final class IoLib {
         throws ResolvedControlThrowable {
       if (args.hasNext()) {
         // open the argument for reading and set it as the default input file
-        ByteString filename = args.nextString();
-        IoFile f = lib.openFile(filename, Open.Mode.READ);
-        assert (f != null);
-        lib.setDefaultInputFile(f);
-        context.getReturnBuffer().setTo(f);
+        try {
+          ByteString filename = args.nextString();
+          IoFile f = lib.openFile(filename, Open.Mode.READ);
+          assert (f != null);
+          lib.setDefaultInputFile(f);
+          context.getReturnBuffer().setTo(f);
+        } catch (Exception ex) {
+          IoLib.setErrorMessage(context.getReturnBuffer(), ex);
+          return;
+        }
       } else {
         // return the default input file
         IoFile inFile = lib.getDefaultInputFile();
@@ -760,7 +772,7 @@ public final class IoLib {
       try {
         file = lib.openFile(filename, mode);
       } catch (Exception ex) {
-        context.getReturnBuffer().setTo(null, ex.getMessage());
+        setErrorMessage(context.getReturnBuffer(), ex);
         return;
       }
 
@@ -789,11 +801,16 @@ public final class IoLib {
         throws ResolvedControlThrowable {
       if (args.hasNext()) {
         // open the argument for writing and set it as the default output file
-        ByteString filename = args.nextString();
-        IoFile f = lib.openFile(filename, Open.Mode.WRITE);
-        assert (f != null);
-        lib.setDefaultOutputFile(f);
-        context.getReturnBuffer().setTo(f);
+        try {
+          ByteString filename = args.nextString();
+          IoFile f = lib.openFile(filename, Open.Mode.WRITE);
+          assert (f != null);
+          lib.setDefaultOutputFile(f);
+          context.getReturnBuffer().setTo(f);
+        } catch (Exception ex) {
+          IoLib.setErrorMessage(context.getReturnBuffer(), ex);
+          return;
+        }
       } else {
         // return the default output file
         IoFile outFile = lib.getDefaultOutputFile();
