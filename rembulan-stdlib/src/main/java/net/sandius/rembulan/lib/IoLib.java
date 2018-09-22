@@ -546,8 +546,8 @@ public final class IoLib {
   }
 
   private IoFile openFileForWrite(Path path) throws IOException {
-    SeekableByteChannel channel =
-        Files.newByteChannel(path, StandardOpenOption.WRITE, StandardOpenOption.CREATE);
+    SeekableByteChannel channel = Files.newByteChannel(path, StandardOpenOption.WRITE,
+        StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.CREATE);
     OutputStream out = Channels.newOutputStream(channel);
     return new OutputStreamIoFile2(out, channel, this.fileMetatable, null);
   }

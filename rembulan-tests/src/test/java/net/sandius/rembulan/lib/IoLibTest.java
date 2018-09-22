@@ -1024,5 +1024,21 @@ public class IoLibTest extends TestBase {
     // Then:
     assertThat(actual[0]).isEqualTo("154,132");
   }
+  
+  @Test
+  public void test_File_write__replaces_old_content() throws Exception {
+    // Given:
+    String oldContent = "123456789a123456789b";
+    String newContent = "123456789c";
+    Path path = createTempFile(oldContent);
+    String program = loadResource("prog13.lua");
+
+    // When:
+    run(program, path.toString(), newContent);
+
+    // Then:
+    String actual = readFile(path);
+    assertThat(actual).isEqualTo(newContent);
+  }
 
 }
