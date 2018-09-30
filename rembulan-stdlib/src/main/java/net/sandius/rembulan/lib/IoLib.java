@@ -811,22 +811,26 @@ public final class IoLib {
     protected void invoke(ExecutionContext context, ArgumentIterator args)
         throws ResolvedControlThrowable {
       if (args.hasNext()) {
-        // open the argument for writing and set it as the default output file
-        try {
-          ByteString filename = args.nextString();
-          IoFile f = lib.openFile(filename, Open.Mode.WRITE);
-          assert (f != null);
-          lib.setDefaultOutputFile(f);
-          context.getReturnBuffer().setTo(f);
-        } catch (Exception ex) {
-          IoLib.setErrorMessage(context.getReturnBuffer(), ex);
-          return;
+        Object arg = args.peek();        
+        IoFile f;
+        if ( arg instanceof ByteString) {
+          try {
+            ByteString filename = args.nextString();
+            f = lib.openFile(filename, Open.Mode.WRITE);
+          } catch (Exception ex) {
+            throw newLuaRuntimeException(ex);
+          } 
+        } else {
+          f = args.nextUserdata(IoFile.typeName(), IoFile.class);
         }
+        assert (f != null);
+        lib.setDefaultOutputFile(f);
+        context.getReturnBuffer().setTo(f);        
       } else {
         // return the default output file
-        IoFile outFile = lib.getDefaultOutputFile();
-        context.getReturnBuffer().setTo(outFile);
-      }
+        IoFile inFile = lib.getDefaultInputFile();
+        context.getReturnBuffer().setTo(inFile);
+      }    
     }
 
   }
