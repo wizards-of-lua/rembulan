@@ -51,6 +51,7 @@ import java.util.Arrays;
 import java.util.Objects;
 
 import net.sandius.rembulan.ByteString;
+import net.sandius.rembulan.LuaRuntimeException;
 import net.sandius.rembulan.Metatables;
 import net.sandius.rembulan.StateContext;
 import net.sandius.rembulan.Table;
@@ -394,8 +395,15 @@ public final class IoLib {
   static void setErrorMessage(ReturnBuffer buffer, Exception ex) {
     String exceptionName = ex.getClass().getSimpleName();
     String exceptionMessage = ex.getMessage();
-    String errorMessage = exceptionName + (exceptionMessage == null ? "" : ": " + exceptionMessage);
-    buffer.setTo(null, errorMessage);
+    String message = exceptionName + (exceptionMessage == null ? "" : ": " + exceptionMessage);
+    buffer.setTo(null, message);
+  }
+  
+  static LuaRuntimeException newLuaRuntimeException(Exception ex) {
+    String exceptionName = ex.getClass().getSimpleName();
+    String exceptionMessage = ex.getMessage();
+    String message = exceptionName + (exceptionMessage == null ? "" : ": " + exceptionMessage);
+    return new LuaRuntimeException(message);
   }
 
   private final LuaFunction _close;
@@ -663,24 +671,27 @@ public final class IoLib {
     protected void invoke(ExecutionContext context, ArgumentIterator args)
         throws ResolvedControlThrowable {
       if (args.hasNext()) {
-        // open the argument for reading and set it as the default input file
-        try {
-          ByteString filename = args.nextString();
-          IoFile f = lib.openFile(filename, Open.Mode.READ);
-          assert (f != null);
-          lib.setDefaultInputFile(f);
-          context.getReturnBuffer().setTo(f);
-        } catch (Exception ex) {
-          IoLib.setErrorMessage(context.getReturnBuffer(), ex);
-          return;
+        Object arg = args.peek();        
+        IoFile f;
+        if ( arg instanceof ByteString) {
+          try {
+            ByteString filename = args.nextString();
+            f = lib.openFile(filename, Open.Mode.READ);
+          } catch (Exception ex) {
+            throw newLuaRuntimeException(ex);
+          } 
+        } else {
+          f = args.nextUserdata(IoFile.typeName(), IoFile.class);
         }
+        assert (f != null);
+        lib.setDefaultInputFile(f);
+        context.getReturnBuffer().setTo(f);        
       } else {
         // return the default input file
         IoFile inFile = lib.getDefaultInputFile();
         context.getReturnBuffer().setTo(inFile);
       }
     }
-
   }
 
   /**
