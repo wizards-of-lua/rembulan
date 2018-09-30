@@ -178,6 +178,20 @@ public class IoLibTest extends TestBase {
     // Then:
     assertThat(actual[0]).isEqualTo("one\ntwo\nthree");
   }
+  
+  @Test
+  public void test_File_read_next_line__Read_file_with_three_lines_and_eol() throws Exception {
+    // Given:
+    String content = "one\ntwo\nthree";
+    Path path = createTempFile(content);
+    String program = loadResource("prog23.lua");
+
+    // When:
+    Object[] actual = run(program, path.toString());
+
+    // Then:
+    assertThat(actual[0]).isEqualTo("one\ntwo\nthree");
+  }
 
   @Test
   public void test_File_read_next_numer__Read_file_with_one_digit() throws Exception {

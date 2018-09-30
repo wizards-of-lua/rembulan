@@ -29,6 +29,8 @@ public class InputStreamIoFile2 extends IoFile {
 
   private final NumberTokenizer numberTokenizer = new NumberTokenizer(byteBuffer);
   private final LineTokenizer lineTokenizer = new LineTokenizer(byteBuffer);
+  private final LineTokenizer lineWithEoLTokenizer = new LineTokenizer(byteBuffer, true);
+
   private final RestOfFileTokenizer restOfFileTokenizer = new RestOfFileTokenizer(byteBuffer);
   private final ChunkTokenizer chunkTokenizer = new ChunkTokenizer(byteBuffer);
 
@@ -85,9 +87,13 @@ public class InputStreamIoFile2 extends IoFile {
   }
 
   @Override
-  public ByteString readLine() throws IOException {
+  public ByteString readLine(boolean returnEol) throws IOException {
     checkClosed();
-    return lineTokenizer.nextToken(channel);
+    if (returnEol) {
+      return lineWithEoLTokenizer.nextToken(channel);
+    } else {
+      return lineTokenizer.nextToken(channel);
+    }
   }
 
   @Override

@@ -79,10 +79,10 @@ public class OutputStreamIoFile2 extends IoFile {
   }
 
   @Override
-  public ByteString readLine() throws IOException {
+  public ByteString readLine(boolean returnEol) throws IOException {
     throw new UnsupportedOperationException("Bad file descriptor");
   }
-
+  
   @Override
   public Number readNumber() throws IOException {
     throw new UnsupportedOperationException("Bad file descriptor");

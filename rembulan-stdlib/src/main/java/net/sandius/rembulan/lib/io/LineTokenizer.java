@@ -6,8 +6,15 @@ import net.sandius.rembulan.ByteString;
 
 public class LineTokenizer extends AbstractTokenizer<ByteString> {
 
+  private boolean returnEol;
+
   public LineTokenizer(ByteBuffer byteBuffer) {
+    this(byteBuffer, false);
+  }
+
+  public LineTokenizer(ByteBuffer byteBuffer, boolean returnEol) {
     super(byteBuffer);
+    this.returnEol = returnEol;
   }
 
   @Override
@@ -16,7 +23,11 @@ public class LineTokenizer extends AbstractTokenizer<ByteString> {
   @Override
   protected boolean handleByte(byte b) {
     if (b == LINE_FEED) {
-      skip++;
+      if (returnEol) {
+        output.write(b);
+      } else {
+        skip++;
+      }
       return false;
     } else {
       output.write(b);

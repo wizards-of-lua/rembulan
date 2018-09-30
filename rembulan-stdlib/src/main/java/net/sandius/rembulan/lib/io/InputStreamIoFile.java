@@ -67,10 +67,10 @@ public class InputStreamIoFile extends IoFile {
   }
 
   @Override
-  public ByteString readLine() throws IOException {
+  public ByteString readLine(boolean returnEol) throws IOException {
     throw new UnsupportedOperationException("not implemented");
   }
-
+  
   @Override
   public Number readNumber() throws IOException {
     throw new UnsupportedOperationException("not implemented");

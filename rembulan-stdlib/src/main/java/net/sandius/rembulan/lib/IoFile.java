@@ -79,7 +79,7 @@ public abstract class IoFile extends DefaultUserdata {
 
   public abstract void write(ByteString s) throws IOException;
 
-  public abstract ByteString readLine() throws IOException;
+  public abstract ByteString readLine(boolean returnEol) throws IOException;
 
   public abstract Number readNumber() throws IOException;
 
@@ -91,7 +91,7 @@ public abstract class IoFile extends DefaultUserdata {
     BEGINNING, CURRENT_POSITION, END
   }
   public enum Format {
-    AS_NUMBER, WHOLE_FILE, NEXT_LINE, NUMBER_OF_CHARACTERS;
+    AS_NUMBER, WHOLE_FILE, NEXT_LINE, NEXT_LINE_WITH_EOL, NUMBER_OF_CHARACTERS;
 
     public static Format get(Object specifier) {
       if (ByteString.of("*n").equals(specifier)) {
@@ -102,6 +102,9 @@ public abstract class IoFile extends DefaultUserdata {
       }
       if (ByteString.of("*l").equals(specifier)) {
         return Format.NEXT_LINE;
+      }
+      if (ByteString.of("*L").equals(specifier)) {
+        return Format.NEXT_LINE_WITH_EOL;
       }
       if (specifier instanceof Number) {
         return Format.NUMBER_OF_CHARACTERS;
@@ -230,8 +233,10 @@ public abstract class IoFile extends DefaultUserdata {
           Format format = Format.get(formatSpecfifier);
           switch (format) {
             case NEXT_LINE:
-              ByteString line = f.readLine();
-              result.add(line);
+              result.add(f.readLine(false));
+              break;
+            case NEXT_LINE_WITH_EOL:
+              result.add(f.readLine(true));
               break;
             case AS_NUMBER:
               Number number = f.readNumber();
