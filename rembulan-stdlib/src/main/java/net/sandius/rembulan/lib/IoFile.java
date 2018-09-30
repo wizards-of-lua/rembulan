@@ -27,7 +27,6 @@ import net.sandius.rembulan.impl.NonsuspendableFunctionException;
 import net.sandius.rembulan.runtime.AbstractFunctionAnyArg;
 import net.sandius.rembulan.runtime.ExecutionContext;
 import net.sandius.rembulan.runtime.ResolvedControlThrowable;
-import net.sandius.rembulan.runtime.ReturnBuffer;
 
 /**
  * A file handle used by the {@link IoLib I/O library}.

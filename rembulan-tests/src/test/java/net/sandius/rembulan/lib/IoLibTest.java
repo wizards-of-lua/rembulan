@@ -1,6 +1,7 @@
 package net.sandius.rembulan.lib;
 
 import java.io.ByteArrayOutputStream;
+import java.math.BigDecimal;
 import java.nio.file.Path;
 
 import org.junit.FixMethodOrder;
@@ -205,7 +206,7 @@ public class IoLibTest extends TestBase {
     // Then:
     assertThat(actual[0]).isEqualTo(12L);
   }
-
+  
   @Test
   public void test_File_read_next_number__Read_file_with_two_digits_separated_by_space()
       throws Exception {
@@ -326,6 +327,90 @@ public class IoLibTest extends TestBase {
     // Then:
     assertThat(actual[0]).isEqualTo(15L);
   }
+  
+  @Test
+  public void test_File_read_next_number__Read_file_with_one_negative_number() throws Exception {
+    // Given:
+    String content = "-123";
+    Path path = createTempFile(content);
+    String program = loadResource("prog5.lua");
+
+    // When:
+    Object[] actual = run(program, path.toString());
+
+    // Then:
+    assertThat(actual[0]).isEqualTo(-123L);
+  }
+  
+  @Test
+  public void test_File_read_next_number__Read_file_with_one_number_having_an_exponent() throws Exception {
+    // Given:
+    String content = "12e2";
+    Path path = createTempFile(content);
+    String program = loadResource("prog5.lua");
+
+    // When:
+    Object[] actual = run(program, path.toString());
+
+    // Then:
+    assertThat(actual[0]).isEqualTo(1200D);
+  }
+  
+  @Test
+  public void test_File_read_next_number__Read_file_with_one_negative_number_having_an_exponent() throws Exception {
+    // Given:
+    String content = "-12e2";
+    Path path = createTempFile(content);
+    String program = loadResource("prog5.lua");
+
+    // When:
+    Object[] actual = run(program, path.toString());
+
+    // Then:
+    assertThat(actual[0]).isEqualTo(-1200D);
+  }
+  
+  @Test
+  public void test_File_read_next_number__Read_file_with_one_number_having_an_negative_exponent() throws Exception {
+    // Given:
+    String content = "12e-2";
+    Path path = createTempFile(content);
+    String program = loadResource("prog5.lua");
+
+    // When:
+    Object[] actual = run(program, path.toString());
+
+    // Then:
+    assertThat(actual[0]).isEqualTo(0.12D);
+  }
+  
+  @Test
+  public void test_File_read_next_number__Read_file_with_one_negative_number_having_an_negative_exponent() throws Exception {
+    // Given:
+    String content = "-12e-2";
+    Path path = createTempFile(content);
+    String program = loadResource("prog5.lua");
+
+    // When:
+    Object[] actual = run(program, path.toString());
+
+    // Then:
+    assertThat(actual[0]).isEqualTo(-0.12D);
+  }
+  
+  @Test
+  public void test_File_read_next_number__Read_file_with_two_consecutive_negative_numbers() throws Exception {
+    // Given:
+    String content = "-1-12";
+    Path path = createTempFile(content);
+    String program = loadResource("prog5.lua");
+
+    // When:
+    Object[] actual = run(program, path.toString());
+
+    // Then:
+    assertThat(actual[0]).isEqualTo(-13L);
+  }
 
   @Test
   public void test_File_read_next_number__Read_file_with_one_decimal_number() throws Exception {
@@ -340,7 +425,7 @@ public class IoLibTest extends TestBase {
     // Then:
     assertThat(actual[0]).isEqualTo(1.1D);
   }
-
+  
   @Test
   public void test_File_read_next_number__Read_file_with_two_decimal_numbers_seperated_by_space()
       throws Exception {
