@@ -154,7 +154,7 @@ public abstract class IoFile extends DefaultUserdata {
       try {
         f.close();
       } catch (ClosedFileException ex) {
-        throw new LuaRuntimeException(ex);
+        throw IoLib.newLuaRuntimeException(ex);
       } catch (Exception ex) {
         IoLib.setErrorMessage(context.getReturnBuffer(), ex);
         return;
@@ -178,7 +178,7 @@ public abstract class IoFile extends DefaultUserdata {
       try {
         f.flush();
       } catch (ClosedFileException ex) {
-        throw new LuaRuntimeException(ex);
+        throw IoLib.newLuaRuntimeException(ex);
       } catch (Exception ex) {
         IoLib.setErrorMessage(context.getReturnBuffer(), ex);
         return;
@@ -202,7 +202,7 @@ public abstract class IoFile extends DefaultUserdata {
       try {
         f.checkClosed();
       } catch (ClosedFileException ex) {
-        throw new LuaRuntimeException(ex);
+        throw IoLib.newLuaRuntimeException(ex);
       } catch (Exception ex) {
         IoLib.setErrorMessage(context.getReturnBuffer(), ex);
         return;
@@ -256,7 +256,7 @@ public abstract class IoFile extends DefaultUserdata {
           }
         } while (args.hasNext());
       } catch (ClosedFileException ex) {
-        throw new LuaRuntimeException(ex);
+        throw IoLib.newLuaRuntimeException(ex);
       } catch (Exception ex) {
         IoLib.setErrorMessage(context.getReturnBuffer(), ex);
         return;
@@ -311,7 +311,7 @@ public abstract class IoFile extends DefaultUserdata {
       try {
         position = file.seek(whence, offset);
       } catch (ClosedFileException ex) {
-        throw new LuaRuntimeException(ex);
+        throw IoLib.newLuaRuntimeException(ex);
       } catch (Exception ex) {
         IoLib.setErrorMessage(context.getReturnBuffer(), ex);
         return;
@@ -356,7 +356,7 @@ public abstract class IoFile extends DefaultUserdata {
         } catch (ClosedFileException ex) {
           // Standard Lua 5.3 (checked on MacOS X) interrupts this function when the file
           // is closed.
-          throw new LuaRuntimeException(ex);
+          throw IoLib.newLuaRuntimeException(ex);
         } catch (Exception ex) {
           IoLib.setErrorMessage(context.getReturnBuffer(), ex);
           return;
