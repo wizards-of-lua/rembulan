@@ -207,7 +207,7 @@ public abstract class IoFile extends DefaultUserdata {
         IoLib.setErrorMessage(context.getReturnBuffer(), ex);
         return;
       }
-      NextLine nextLineFunc = f.nextLine;
+      NextLine nextLineFunc = f.nextLine; // FIXME we must pass the formats...
       context.getReturnBuffer().setTo(nextLineFunc);
     }
 
@@ -255,12 +255,9 @@ public abstract class IoFile extends DefaultUserdata {
               throw new UnsupportedOperationException("Unsupported format: " + format);
           }
         } while (args.hasNext());
-      } catch (ClosedFileException ex) {
-        throw IoLib.newLuaRuntimeException(ex);
       } catch (Exception ex) {
-        IoLib.setErrorMessage(context.getReturnBuffer(), ex);
-        return;
-      }
+        throw IoLib.newLuaRuntimeException(ex);
+      } 
       context.getReturnBuffer().setToContentsOf(result);
     }
   }
