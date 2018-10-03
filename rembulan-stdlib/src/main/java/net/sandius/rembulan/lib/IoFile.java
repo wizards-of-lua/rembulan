@@ -20,12 +20,12 @@ import java.util.List;
 
 import net.sandius.rembulan.ByteString;
 import net.sandius.rembulan.Conversions;
-import net.sandius.rembulan.LuaRuntimeException;
 import net.sandius.rembulan.Table;
 import net.sandius.rembulan.impl.DefaultUserdata;
 import net.sandius.rembulan.impl.NonsuspendableFunctionException;
 import net.sandius.rembulan.runtime.AbstractFunctionAnyArg;
 import net.sandius.rembulan.runtime.ExecutionContext;
+import net.sandius.rembulan.runtime.LuaFunction;
 import net.sandius.rembulan.runtime.ResolvedControlThrowable;
 
 /**
@@ -68,8 +68,6 @@ public abstract class IoFile extends DefaultUserdata {
       throw new ClosedFileException();
     }
   }
-
-  private NextLine nextLine = new NextLine();
 
   public abstract boolean isClosed();
 
@@ -117,15 +115,28 @@ public abstract class IoFile extends DefaultUserdata {
 
   ///
 
-  class NextLine extends AbstractFunctionAnyArg {
+  static class DelegatingFunction extends AbstractFunctionAnyArg {
 
-    private Read READ = new Read();
+    private LuaFunction function;
+    private Object[] args;
 
-    public NextLine() {}
+    public DelegatingFunction(Object delegate, LuaFunction function, ArgumentIterator arguments) {
+      this.function = function;
+      int argCount = arguments.remaining();
+      if (argCount == 0) {
+        this.args = new Object[] {delegate};
+      } else {
+        this.args = new Object[argCount + 1];
+        for (int i = 0; i < argCount; ++i) {
+          this.args[i + 1] = arguments.next();
+        }
+        this.args[0] = delegate;
+      }
+    }
 
     @Override
     public void invoke(ExecutionContext context, Object[] args) throws ResolvedControlThrowable {
-      READ.invoke(context, IoFile.this);
+      function.invoke(context, this.args);
     }
 
     @Override
@@ -207,7 +218,7 @@ public abstract class IoFile extends DefaultUserdata {
         IoLib.setErrorMessage(context.getReturnBuffer(), ex);
         return;
       }
-      NextLine nextLineFunc = f.nextLine; // FIXME we must pass the formats...
+      DelegatingFunction nextLineFunc = new DelegatingFunction(f, new Read(), args);
       context.getReturnBuffer().setTo(nextLineFunc);
     }
 
@@ -257,7 +268,7 @@ public abstract class IoFile extends DefaultUserdata {
         } while (args.hasNext());
       } catch (Exception ex) {
         throw IoLib.newLuaRuntimeException(ex);
-      } 
+      }
       context.getReturnBuffer().setToContentsOf(result);
     }
   }

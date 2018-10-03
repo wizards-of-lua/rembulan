@@ -50,6 +50,19 @@ public class IoLibTest extends TestBase {
     // Then:
     assertThat(actual[0]).isEqualTo("a");
   }
+  
+  @Test
+  public void test_File_lines__Read_file_with_multiple_line_having_each_two_numbers_and_some_text() throws Exception {
+    // Given:
+    Path path = createTempFile("1 2 a\n3 4 b\n100 200 end");
+    String program = loadResource("prog24.lua");
+
+    // When:
+    Object[] actual = run(program, path.toString());
+
+    // Then:
+    assertThat(actual[0]).isEqualTo("1 2  a\n3 4  b\n100 200  end");
+  }
 
   @Test
   public void test_File_lines__Read_file_with_single_line() throws Exception {
