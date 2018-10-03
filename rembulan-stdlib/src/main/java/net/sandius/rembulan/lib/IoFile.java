@@ -212,12 +212,9 @@ public abstract class IoFile extends DefaultUserdata {
       final IoFile f = args.nextUserdata(typeName(), IoFile.class);
       try {
         f.checkClosed();
-      } catch (ClosedFileException ex) {
-        throw IoLib.newLuaRuntimeException(ex);
       } catch (Exception ex) {
-        IoLib.setErrorMessage(context.getReturnBuffer(), ex);
-        return;
-      }
+        throw IoLib.newLuaRuntimeException(ex);
+      } 
       DelegatingFunction nextLineFunc = new DelegatingFunction(f, new Read(), args);
       context.getReturnBuffer().setTo(nextLineFunc);
     }
