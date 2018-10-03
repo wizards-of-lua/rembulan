@@ -8,9 +8,9 @@ import net.sandius.rembulan.Conversions;
 public class NumberTokenizer extends AbstractTokenizer<Number> {
 
   Byte lastByte = null;
+  boolean hasDigit = false;
   boolean hasDot = false;
   boolean hasE = false;
-  boolean trailing = false;
   boolean isNegative = false;
   boolean isSignedExp = false;
 
@@ -21,9 +21,9 @@ public class NumberTokenizer extends AbstractTokenizer<Number> {
   @Override
   protected void reset() {
     lastByte = null;
+    hasDigit = false;
     hasDot = false;
     hasE = false;
-    trailing = false;
     isNegative = false;
     isSignedExp = false;
   }
@@ -31,36 +31,29 @@ public class NumberTokenizer extends AbstractTokenizer<Number> {
   @Override
   protected boolean handleByte(byte b) {
     try {
-      if (b == LINE_FEED) {
-        skip++;
-        return false;
-      } else if (Character.isWhitespace(b)) {
+      if (b == LINE_FEED || Character.isWhitespace(b)) {
         if (output.size() > 0) {
-          trailing = true;
+          return false;
         }
         skip++;
       } else {
-        if (trailing) {
-          return false;
+        if (Character.isDigit(b)) {
+          output.write(b);
+          hasDigit = true;
+        } else if ('.' == b && !hasDot) {
+          output.write(b);
+          hasDot = true;
+        } else if (('e' == b || 'E' == b) && !hasE && hasDigit) {
+          output.write(b);
+          hasE = true;
+        } else if ('-' == b && !hasDigit && !isNegative) {
+          output.write(b);
+          isNegative = true;
+        } else if (('-' == b || '+' == b) && (lastByte == 'e' || lastByte == 'E') && !isSignedExp) {
+          output.write(b);
+          isSignedExp = true;
         } else {
-          if (Character.isDigit(b)) {
-            output.write(b);
-          } else if ('.' == b && !hasDot) {
-            output.write(b);
-            hasDot = true;
-          } else if (('e' == b || 'E' == b) && !hasE) {
-            output.write(b);
-            hasE = true;
-          } else if ('-' == b && lastByte == null && !isNegative) {
-            output.write(b);
-            isNegative = true;
-          } else if (('-' == b || '+' == b) && (lastByte == 'e' || lastByte == 'E')
-              && !isSignedExp) {
-            output.write(b);
-            isSignedExp = true;
-          } else {
-            return false;
-          }
+          return false;
         }
       }
       return true;
