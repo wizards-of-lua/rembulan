@@ -105,8 +105,8 @@ public class RembulanConsole {
 				.withDebug(true)
 				.installInto(state);
 
-		printFunction = Aux.callGlobal(env, "print");
-		requireFunction = Aux.callGlobal(env, "require");
+		printFunction = Auxiliary.callGlobal(env, "print");
+		requireFunction = Auxiliary.callGlobal(env, "require");
 
 		this.callExecutor = DirectCallExecutor.newExecutor();
 
@@ -295,7 +295,7 @@ public class RembulanConsole {
 
 	private String getGlobalString(String name, String defaultValue) throws CallException {
 		final Object[] result;
-		result = callFunction(Aux.index(env, name));
+		result = callFunction(Auxiliary.index(env, name));
 
 		if (result.length > 0) {
 			ByteString s = Conversions.stringValueOf(result[0]);

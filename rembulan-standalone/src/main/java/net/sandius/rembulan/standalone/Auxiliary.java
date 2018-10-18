@@ -33,9 +33,9 @@ import java.util.Objects;
 /**
  * Basic utility functions.
  */
-public final class Aux {
+public final class Auxiliary {
 
-	private Aux() {
+	private Auxiliary() {
 		// not to be instantiated
 	}
 
