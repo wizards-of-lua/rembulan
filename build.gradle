@@ -11,8 +11,6 @@ subprojects {
   sourceCompatibility = 1.8
   targetCompatibility = 1.8
 
-
-
   repositories {
     mavenLocal()
 
@@ -27,8 +25,9 @@ subprojects {
   artifacts {
     archives sourceJar
   }
-
-
-
+  
+  tasks.withType(Compile) {
+    options.encoding = 'UTF-8'
+  }
 
 }
