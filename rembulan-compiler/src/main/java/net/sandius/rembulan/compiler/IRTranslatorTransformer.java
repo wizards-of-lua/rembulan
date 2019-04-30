@@ -209,6 +209,11 @@ class IRTranslatorTransformer extends Transformer {
 
 	@Override
 	public LValueExpr transform(IndexExpr e) {
+		Val value = null;
+		if (assigning) {
+			value = popVal();
+		}
+
 		boolean as = assigning;
 		assigning = false;
 
@@ -222,7 +227,6 @@ class IRTranslatorTransformer extends Transformer {
 		insns.atLine(e.line());
 
 		if (assigning) {
-			Val value = popVal();
 			insns.add(new TabSet(obj, key, value));
 		}
 		else {
