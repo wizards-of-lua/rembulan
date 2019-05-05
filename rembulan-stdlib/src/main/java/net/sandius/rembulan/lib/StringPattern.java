@@ -1008,8 +1008,8 @@ public class StringPattern {
           char d = next();
           return new CharacterSet.RangeSetElement(c, d);
         } else {
-          // not a range
-          return new CharacterSet.CharacterClassSetElement(CC_lit(c));
+          // not a range — inside [...] magic characters are literals, so bypass isMagic check
+          return new CharacterSet.CharacterClassSetElement(new CC_lit(c));
         }
       }
     }
