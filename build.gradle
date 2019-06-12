@@ -2,7 +2,7 @@ allprojects  {
   apply plugin: 'maven'
   apply plugin: 'eclipse'
   group = 'net.sandius.rembulan'
-  version = '0.2-SNAPSHOT'
+  version = '0.3-SNAPSHOT'
 }
 
 subprojects {
