@@ -11,10 +11,8 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Comparator;
-
 import org.assertj.core.api.Assertions;
 import org.junit.Before;
-
 import net.sandius.rembulan.StateContext;
 import net.sandius.rembulan.Table;
 import net.sandius.rembulan.Variable;
@@ -103,7 +101,7 @@ public class TestBase extends Assertions {
 
   public Path createTempFile(String content) throws IOException {
     Path result = Files.createTempFile(tempDir, "temp", ".txt");
-    Files.write(result, content.getBytes());
+    Files.write(result, content.getBytes(StandardCharsets.UTF_8));
     return result;
   }
 
