@@ -49,7 +49,6 @@ import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Objects;
-
 import net.sandius.rembulan.ByteString;
 import net.sandius.rembulan.LuaRuntimeException;
 import net.sandius.rembulan.Metatables;
@@ -398,7 +397,7 @@ public final class IoLib {
     String message = exceptionName + (exceptionMessage == null ? "" : ": " + exceptionMessage);
     buffer.setTo(null, message);
   }
-  
+
   static LuaRuntimeException newLuaRuntimeException(Exception ex) {
     String exceptionName = ex.getClass().getSimpleName();
     String exceptionMessage = ex.getMessage();
@@ -638,7 +637,7 @@ public final class IoLib {
       IoFile outFile = lib.getDefaultOutputFile();
 
       try {
-        Dispatch.call(context, file_flush());
+        Dispatch.call(context, file_flush(), outFile);
       } catch (UnresolvedControlThrowable ct) {
         throw ct.resolve(this, outFile);
       }
@@ -671,21 +670,21 @@ public final class IoLib {
     protected void invoke(ExecutionContext context, ArgumentIterator args)
         throws ResolvedControlThrowable {
       if (args.hasNext()) {
-        Object arg = args.peek();        
+        Object arg = args.peek();
         IoFile f;
-        if ( arg instanceof ByteString) {
+        if (arg instanceof ByteString) {
           try {
             ByteString filename = args.nextString();
             f = lib.openFile(filename, Open.Mode.READ);
           } catch (Exception ex) {
             throw newLuaRuntimeException(ex);
-          } 
+          }
         } else {
           f = args.nextUserdata(IoFile.typeName(), IoFile.class);
         }
         assert (f != null);
         lib.setDefaultInputFile(f);
-        context.getReturnBuffer().setTo(f);        
+        context.getReturnBuffer().setTo(f);
       } else {
         // return the default input file
         IoFile inFile = lib.getDefaultInputFile();
@@ -811,26 +810,26 @@ public final class IoLib {
     protected void invoke(ExecutionContext context, ArgumentIterator args)
         throws ResolvedControlThrowable {
       if (args.hasNext()) {
-        Object arg = args.peek();        
+        Object arg = args.peek();
         IoFile f;
-        if ( arg instanceof ByteString) {
+        if (arg instanceof ByteString) {
           try {
             ByteString filename = args.nextString();
             f = lib.openFile(filename, Open.Mode.WRITE);
           } catch (Exception ex) {
             throw newLuaRuntimeException(ex);
-          } 
+          }
         } else {
           f = args.nextUserdata(IoFile.typeName(), IoFile.class);
         }
         assert (f != null);
         lib.setDefaultOutputFile(f);
-        context.getReturnBuffer().setTo(f);        
+        context.getReturnBuffer().setTo(f);
       } else {
         // return the default output file
         IoFile inFile = lib.getDefaultInputFile();
         context.getReturnBuffer().setTo(inFile);
-      }    
+      }
     }
 
   }
