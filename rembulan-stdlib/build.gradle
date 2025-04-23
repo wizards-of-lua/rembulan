@@ -1,5 +1,16 @@
+plugins {
+  id 'java-library'
+}
 
 description = 'Rembulan Standard Library'
-dependencies {
-  compile project(':rembulan-parent:rembulan-runtime')
+
+java {
+  toolchain {
+    languageVersion = JavaLanguageVersion.of(8)
+  }
 }
+
+dependencies {
+  implementation project(':rembulan-runtime')
+}
+

@@ -1,6 +1,17 @@
+plugins {
+  id 'java-library'
+}
 
 description = 'Rembulan LuaJava compatibility library'
-dependencies {
-  compile project(':rembulan-parent:rembulan-runtime')
-  compile project(':rembulan-parent:rembulan-stdlib')
+
+java {
+  toolchain {
+    languageVersion = JavaLanguageVersion.of(8)
+  }
 }
+
+dependencies {
+  implementation project(':rembulan-runtime')
+  implementation project(':rembulan-stdlib')
+}
+

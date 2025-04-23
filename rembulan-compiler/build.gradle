@@ -1,37 +1,40 @@
+plugins {
+  id 'ca.coglinc2.javacc' version '3.0.0'
+}
 
 description = 'Rembulan Compiler'
 
-buildscript {
-  repositories {
-    maven {
-      url "https://plugins.gradle.org/m2/"
-    }
-  }
-  dependencies {
-    classpath "gradle.plugin.ca.coglinc2:javacc-gradle-plugin:3.0.0"
+java {
+  toolchain {
+    languageVersion = JavaLanguageVersion.of(8)
   }
 }
-
-apply plugin: "ca.coglinc2.javacc"
 
 sourceSets {
-    main {
-        java {
-            srcDir compileJavacc.outputDirectory
-        }
+  main {
+    java {
+      srcDir compileJavacc.outputDirectory
     }
+  }
 }
-eclipseClasspath.dependsOn("compileJavacc")
+
+tasks.named('eclipseClasspath') {
+  dependsOn tasks.named('compileJavacc')
+}
 
 compileJavacc {
-    inputDirectory = file('src/main/javacc')
-    outputDirectory = file(project.buildDir.absolutePath + '/generated/javacc/net/sandius/rembulan/parser')
+  inputDirectory  = file('src/main/javacc')
+  outputDirectory = file("$buildDir/generated/javacc/net/sandius/rembulan/parser")
+}
+
+tasks.named('sourceJar') {
+  dependsOn tasks.named('compileJavacc')
 }
 
 dependencies {
-
-  compile project(':rembulan-parent:rembulan-runtime')
-    compile group: 'org.ow2.asm', name: 'asm', version:'9.7.1'
-    compile group: 'org.ow2.asm', name: 'asm-analysis', version:'9.7.1'
-    compile group: 'org.ow2.asm', name: 'asm-util', version:'9.7.1'
+  implementation project(':rembulan-runtime')
+  implementation 'org.ow2.asm:asm:9.7.1'
+  implementation 'org.ow2.asm:asm-analysis:9.7.1'
+  implementation 'org.ow2.asm:asm-util:9.7.1'
 }
+

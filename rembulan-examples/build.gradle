@@ -1,7 +1,18 @@
+plugins {
+  id 'java'
+}
 
 description = 'Rembulan examples'
-dependencies {
-  compile project(':rembulan-parent:rembulan-runtime')
-  compile project(':rembulan-parent:rembulan-compiler')
-  compile project(':rembulan-parent:rembulan-stdlib')
+
+java {
+  toolchain {
+    languageVersion = JavaLanguageVersion.of(8)
+  }
 }
+
+dependencies {
+  implementation project(':rembulan-runtime')
+  implementation project(':rembulan-compiler')
+  implementation project(':rembulan-stdlib')
+}
+

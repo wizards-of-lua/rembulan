@@ -1,33 +1,59 @@
-allprojects  {
-  apply plugin: 'maven'
-  apply plugin: 'eclipse'
-  group = 'net.wizardsoflua.rembulan'
-  version = '0.3.0'
+plugins {
+  id 'java-library'
+  id 'maven-publish'
+  id 'eclipse'
 }
 
 subprojects {
-  apply plugin: 'java'
+  group = 'net.wizardsoflua.rembulan'
+  version = '0.3.0'
 
-  sourceCompatibility = 1.8
-  targetCompatibility = 1.8
+  apply plugin: 'java-library'
+  apply plugin: 'maven-publish'
+  apply plugin: 'eclipse'
+
+  java {
+    toolchain {
+      languageVersion = JavaLanguageVersion.of(8)
+    }
+  }
 
   repositories {
     mavenLocal()
+    mavenCentral()
+  }
 
-    maven { url "https://repo.maven.apache.org/maven2" }
+  tasks.register('sourceJar', Jar) {
+    archiveClassifier.set('sources')
+    from(sourceSets.main.allSource)
   }
-  
-  task sourceJar(type: Jar) {
-    classifier = 'sources'
-    from sourceSets.main.allSource
+
+  tasks.register('javadocJar', Jar) {
+    archiveClassifier.set('javadoc')
+    from(tasks.javadoc)
   }
-  
-  artifacts {
-    archives sourceJar
-  }
-  
+
   tasks.withType(JavaCompile) {
     options.encoding = 'UTF-8'
   }
 
+  publishing {
+    publications {
+      mavenJava(MavenPublication) {
+        from(components.java)
+        artifact(tasks.named('sourceJar'))
+        artifact(tasks.named('javadocJar'))
+      }
+    }
+    repositories {
+      maven {
+        url = uri(findProperty('repoUrl') ?: 'https://repo.maven.apache.org/maven2')
+        credentials {
+          username = findProperty('repoUser')
+          password = findProperty('repoPass')
+        }
+      }
+    }
+  }
 }
+

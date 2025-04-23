@@ -1,2 +1,21 @@
+plugins {
+  id 'java-library'
+}
 
 description = 'Rembulan Runtime'
+
+java {
+  toolchain {
+    languageVersion = JavaLanguageVersion.of(8)
+  }
+}
+
+repositories {
+  mavenLocal()
+  mavenCentral()
+}
+
+dependencies {
+  // Add runtime-specific dependencies here if needed
+}
+
