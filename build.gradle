@@ -6,7 +6,7 @@ plugins {
 
 subprojects {
   group = 'net.wizardsoflua.rembulan'
-  version = '0.3.0'
+  version = '0.3.1'
 
   apply plugin: 'java-library'
   apply plugin: 'maven-publish'

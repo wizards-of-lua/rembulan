@@ -842,7 +842,7 @@ public final class BasicLib {
 		ModuleLib.addToLoaded(env, "_G", env);
 	}
 
-	static class Print extends AbstractLibFunction {
+	public static class Print extends AbstractLibFunction {
 
 		static class SuspendedState {
 
