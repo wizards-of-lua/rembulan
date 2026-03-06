@@ -16,14 +16,14 @@
 
 package net.sandius.rembulan.compiler.tf;
 
+import java.util.Objects;
 import net.sandius.rembulan.compiler.analysis.TypeInfo;
+import net.sandius.rembulan.compiler.analysis.types.LiteralType;
 import net.sandius.rembulan.compiler.analysis.types.LuaTypes;
 import net.sandius.rembulan.compiler.analysis.types.Type;
 import net.sandius.rembulan.compiler.ir.Branch;
 import net.sandius.rembulan.compiler.ir.Jmp;
 import net.sandius.rembulan.compiler.ir.ToNext;
-
-import java.util.Objects;
 
 class BranchInlinerVisitor extends CodeTransformerVisitor {
 
@@ -69,18 +69,21 @@ class BranchInlinerVisitor extends CodeTransformerVisitor {
 
 	@Override
 	public void visit(Branch.Condition.Bool cond) {
-		Type t = types.typeOf(cond.addr());
-		if (t.isSubtypeOf(LuaTypes.NIL)) {
-			// t evaluates to false
-			inline = !cond.expected();
-		}
-		else if (t.isSubtypeOf(LuaTypes.ANY) && !t.equals(LuaTypes.ANY) && !t.isSubtypeOf(LuaTypes.BOOLEAN)) {
-			// t evaluates to true
-			inline = cond.expected();
-		}
-		else {
-			inline = null;
-		}
+	    Type t = types.typeOf(cond.addr());
+	    if (t.isSubtypeOf(LuaTypes.NIL)) {
+	        // t evaluates to false
+	        inline = !cond.expected();
+	    }
+	    else if (t.isSubtypeOf(LuaTypes.ANY) 
+	            && !t.equals(LuaTypes.ANY) 
+	            && !t.isSubtypeOf(LuaTypes.BOOLEAN)
+	            && !LuaTypes.BOOLEAN.isSubtypeOf(t)) {  // ← only new line
+	        // t evaluates to true (non-nil, cannot contain false)
+	        inline = cond.expected();
+	    }
+	    else {
+	        inline = null;
+	    }
 	}
 
 	@Override
