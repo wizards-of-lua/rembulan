@@ -61,6 +61,7 @@ import net.sandius.rembulan.lib.io.InputStreamIoFile;
 import net.sandius.rembulan.lib.io.InputStreamIoFile2;
 import net.sandius.rembulan.lib.io.OutputStreamIoFile;
 import net.sandius.rembulan.lib.io.OutputStreamIoFile2;
+import net.sandius.rembulan.lib.io.ReadWriteIoFile;
 import net.sandius.rembulan.runtime.Dispatch;
 import net.sandius.rembulan.runtime.ExecutionContext;
 import net.sandius.rembulan.runtime.LuaFunction;
@@ -536,8 +537,13 @@ public final class IoLib {
           return openFileForWrite(path);
         case APPEND:
           return openFileForAppend(path);
+        case UPDATE_READ:
+          return openFileForUpdateRead(path);
+        case UPDATE_WRITE:
+          return openFileForUpdateWrite(path);
+        case UPDATE_APPEND:
+          return openFileForUpdateAppend(path);
         default:
-          // TODO
           throw new UnsupportedOperationException(
               "open file with mode " + mode + " is not supported right now");
       }
@@ -564,6 +570,29 @@ public final class IoLib {
         Files.newByteChannel(path, StandardOpenOption.APPEND, StandardOpenOption.CREATE);
     OutputStream out = Channels.newOutputStream(channel);
     return new OutputStreamIoFile2(out, channel, this.fileMetatable, null);
+  }
+
+  private IoFile openFileForUpdateRead(Path path) throws IOException {
+    // r+: read/write, file must exist, position at beginning
+    SeekableByteChannel channel =
+        Files.newByteChannel(path, StandardOpenOption.READ, StandardOpenOption.WRITE);
+    return new ReadWriteIoFile(channel, false, this.fileMetatable, null);
+  }
+
+  private IoFile openFileForUpdateWrite(Path path) throws IOException {
+    // w+: read/write, truncate existing or create, position at beginning
+    SeekableByteChannel channel = Files.newByteChannel(path, StandardOpenOption.READ,
+        StandardOpenOption.WRITE, StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.CREATE);
+    return new ReadWriteIoFile(channel, false, this.fileMetatable, null);
+  }
+
+  private IoFile openFileForUpdateAppend(Path path) throws IOException {
+    // a+: read/write, create if absent, reads from any position, writes always go to EOF.
+    // Java NIO does not allow READ + APPEND together, so append-on-write is emulated by
+    // ReadWriteIoFile seeking to EOF before each write.
+    SeekableByteChannel channel = Files.newByteChannel(path, StandardOpenOption.READ,
+        StandardOpenOption.WRITE, StandardOpenOption.CREATE);
+    return new ReadWriteIoFile(channel, true, this.fileMetatable, null);
   }
 
   private IoFile setDefaultInputFile(IoFile f) {
@@ -949,7 +978,5 @@ public final class IoLib {
         throws ResolvedControlThrowable {
       // results are already on the stack, this is a no-op
     }
-
   }
-
 }

@@ -1,12 +1,11 @@
 package net.sandius.rembulan.lib;
 
 import java.io.ByteArrayOutputStream;
+import java.nio.file.Files;
 import java.nio.file.Path;
-
 import org.junit.FixMethodOrder;
 import org.junit.Test;
 import org.junit.runners.MethodSorters;
-
 import net.sandius.rembulan.testenv.TestBase;
 
 @FixMethodOrder(MethodSorters.JVM)
@@ -50,9 +49,10 @@ public class IoLibTest extends TestBase {
     // Then:
     assertThat(actual[0]).isEqualTo("a");
   }
-  
+
   @Test
-  public void test_File_lines__Read_file_with_multiple_line_having_each_two_numbers_and_some_text() throws Exception {
+  public void test_File_lines__Read_file_with_multiple_line_having_each_two_numbers_and_some_text()
+      throws Exception {
     // Given:
     Path path = createTempFile("1 2 a\n3 4 b\n100 200 end");
     String program = loadResource("prog24.lua");
@@ -232,7 +232,7 @@ public class IoLibTest extends TestBase {
     // Then:
     assertThat(actual[0]).isEqualTo(12L);
   }
-  
+
   @Test
   public void test_File_read_next_number__Read_file_with_newline_and_number() throws Exception {
     // Given:
@@ -246,7 +246,7 @@ public class IoLibTest extends TestBase {
     // Then:
     assertThat(actual[0]).isEqualTo(12L);
   }
-  
+
   @Test
   public void test_File_read_next_number__Read_file_with_newlines_and_numbers() throws Exception {
     // Given:
@@ -1183,6 +1183,105 @@ public class IoLibTest extends TestBase {
     // Then:
     String actual = readFile(path);
     assertThat(actual).isEqualTo(newContent);
+  }
+
+  // -------------------------------------------------------------------------
+  // r+ (update-read) mode
+  // -------------------------------------------------------------------------
+
+  @Test
+  public void test_File_open_in_r_plus_mode__write_overwrites_in_place() throws Exception {
+    // Given:
+    String content = "hello world";
+    Path path = createTempFile(content);
+    String program = loadResource("prog25.lua");
+
+    // When:
+    run(program, path.toString(), "HELLO");
+
+    // Then: first 5 bytes overwritten, tail preserved, file not truncated
+    String actual = readFile(path);
+    assertThat(actual).isEqualTo("HELLO world");
+  }
+
+  @Test
+  public void test_File_open_in_r_plus_mode__does_not_create_missing_file() throws Exception {
+    // Given:
+    Path path = createTempFilename(); // path that does not exist
+    String program = loadResource("prog25.lua");
+
+    // When:
+    run(program, path.toString(), "any");
+
+    // Then: r+ has no CREATE flag; file must still not exist
+    assertThat(Files.exists(path)).isFalse();
+  }
+
+  // -------------------------------------------------------------------------
+  // w+ (update-write) mode
+  // -------------------------------------------------------------------------
+
+  @Test
+  public void test_File_open_in_w_plus_mode__truncates_existing_content() throws Exception {
+    // Given:
+    String oldContent = "old content";
+    Path path = createTempFile(oldContent);
+    String program = loadResource("prog26.lua");
+
+    // When:
+    run(program, path.toString(), "new");
+
+    // Then: file is truncated; only the newly written text is present
+    String actual = readFile(path);
+    assertThat(actual).isEqualTo("new");
+  }
+
+  @Test
+  public void test_File_open_in_w_plus_mode__creates_new_file() throws Exception {
+    // Given:
+    Path path = createTempFilename(); // path that does not exist
+    String program = loadResource("prog26.lua");
+
+    // When:
+    run(program, path.toString(), "hello");
+
+    // Then:
+    String actual = readFile(path);
+    assertThat(actual).isEqualTo("hello");
+  }
+
+  // -------------------------------------------------------------------------
+  // a+ (update-append) mode
+  // -------------------------------------------------------------------------
+
+  @Test
+  public void test_File_open_in_a_plus_mode__write_appends_to_end_regardless_of_seek_position()
+      throws Exception {
+    // Given:
+    String content = "hello";
+    Path path = createTempFile(content);
+    String program = loadResource("prog27.lua");
+
+    // When: Lua seeks to position 0, then writes — write must still go to EOF
+    run(program, path.toString(), " world");
+
+    // Then:
+    String actual = readFile(path);
+    assertThat(actual).isEqualTo("hello world");
+  }
+
+  @Test
+  public void test_File_open_in_a_plus_mode__creates_new_file() throws Exception {
+    // Given:
+    Path path = createTempFilename(); // path that does not exist
+    String program = loadResource("prog27.lua");
+
+    // When:
+    run(program, path.toString(), "hello");
+
+    // Then:
+    String actual = readFile(path);
+    assertThat(actual).isEqualTo("hello");
   }
 
 }
