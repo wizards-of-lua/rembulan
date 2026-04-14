@@ -698,6 +698,19 @@ public final class MathLib {
 
 	}
 
+	static abstract class AbstractMathFunction2 extends AbstractLibFunction {
+
+		protected abstract Number op(double x, double y);
+
+		@Override
+		protected void invoke(ExecutionContext context, ArgumentIterator args) throws ResolvedControlThrowable {
+			double x = args.nextNumber().doubleValue();
+			double y = args.nextNumber().doubleValue();
+			context.getReturnBuffer().setTo(op(x, y));
+		}
+
+	}
+
 	static class Abs extends AbstractMathFunction1 {
 
 		@Override
@@ -745,7 +758,7 @@ public final class MathLib {
 
 	}
 
-	static class ATan extends AbstractMathFunction1 {
+	static class ATan extends AbstractMathFunction2 {
 
 		@Override
 		protected String name() {
@@ -753,8 +766,15 @@ public final class MathLib {
 		}
 
 		@Override
-		protected Number op(double x) {
-			return Math.atan(x);
+		protected Number op(double y, double x) {
+			return Math.atan2(y, x);
+		}
+
+		@Override
+		protected void invoke(ExecutionContext context, ArgumentIterator args) throws ResolvedControlThrowable {
+			double y = args.nextNumber().doubleValue();
+			double x = args.hasNext() ? args.nextNumber().doubleValue() : 1.0;
+			context.getReturnBuffer().setTo(op(y, x));
 		}
 
 	}
