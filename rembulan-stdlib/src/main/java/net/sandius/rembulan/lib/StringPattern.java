@@ -576,7 +576,7 @@ public class StringPattern {
 
     @Override
     public int match(MatchState ms) {
-      if (ms.strIdx == ms.str.length() - 1) {
+      if (ms.strIdx == ms.str.length()) {
         return ms.next(ms.strIdx);
       } else {
         return NO_MATCH;
