@@ -21,6 +21,7 @@ import net.sandius.rembulan.Table;
 import net.sandius.rembulan.TableFactory;
 import net.sandius.rembulan.util.TraversableHashMap;
 
+import java.util.HashMap;
 import java.util.NoSuchElementException;
 
 /**
@@ -32,10 +33,23 @@ public class DefaultTable extends Table {
 	private final TraversableHashMap<Object, Object> values;
 
 	/**
+	 * Keys removed since the last insertion of a new key, each mapped to the key that followed it
+	 * in the traversal order at the time of its removal ({@code null} if it was the last one).
+	 *
+	 * <p>Lua allows clearing existing fields during a traversal, so {@code next} must accept a
+	 * key that has just been removed. The reference implementation keeps such a key in the table
+	 * as a dead key until the next rehash, which only an insertion can trigger; this map does the
+	 * same. Assigning to a non-existent field during a traversal is undefined behaviour in Lua,
+	 * so an insertion may forget all of them.</p>
+	 */
+	private final HashMap<Object, Object> removedKeys;
+
+	/**
 	 * Constructs a new empty table.
 	 */
 	public DefaultTable() {
 		this.values = new TraversableHashMap<>();
+		this.removedKeys = new HashMap<>();
 	}
 
 	static class Factory implements TableFactory {
@@ -81,9 +95,15 @@ public class DefaultTable extends Table {
 		value = Conversions.canonicalRepresentationOf(value);
 
 		if (value == null) {
-			values.remove(key);
+			if (values.containsKey(key)) {
+				removedKeys.put(key, values.getSuccessorOf(key));
+				values.remove(key);
+			}
 		}
 		else {
+			if (!removedKeys.isEmpty() && !values.containsKey(key)) {
+				removedKeys.clear();
+			}
 			values.put(key, value);
 		}
 
@@ -97,6 +117,14 @@ public class DefaultTable extends Table {
 
 	@Override
 	public Object successorKeyOf(Object key) {
+		if (key != null && !values.containsKey(key) && removedKeys.containsKey(key)) {
+			// a removed key: continue with the first key after it that is still present
+			Object next = removedKeys.get(key);
+			while (next != null && !values.containsKey(next)) {
+				next = removedKeys.get(next);
+			}
+			return next;
+		}
 		try {
 			return values.getSuccessorOf(key);
 		}
