@@ -76,4 +76,12 @@ public interface RuntimeEnvironment {
 	 */
 	double getCpuTime();
 
+	/**
+	 * Returns the factory for the temporary files of {@code io.tmpfile}, or {@code null} if
+	 * this runtime environment provides no temporary files.
+	 *
+	 * @return  the temporary file factory (possibly {@code null})
+	 */
+	TempFileFactory tempFileFactory();
+
 }

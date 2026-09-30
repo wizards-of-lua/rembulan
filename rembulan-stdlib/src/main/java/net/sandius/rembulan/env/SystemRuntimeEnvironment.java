@@ -21,6 +21,9 @@ import java.io.OutputStream;
 import java.lang.management.ManagementFactory;
 import java.nio.file.FileSystem;
 import java.nio.file.FileSystems;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 
 class SystemRuntimeEnvironment implements RuntimeEnvironment {
 
@@ -71,6 +74,19 @@ class SystemRuntimeEnvironment implements RuntimeEnvironment {
 		// FIXME: this really isn't a good idea...
 		long nanos = ManagementFactory.getThreadMXBean().getCurrentThreadCpuTime();
 		return nanos / 1000000000.0;
+	}
+
+	/**
+	 * Creates the files in the system's temporary directory. They are removed when closed, or
+	 * else when the JVM exits (on some systems only if it exits normally).
+	 */
+	@Override
+	public TempFileFactory tempFileFactory() {
+		return () -> {
+			Path path = Files.createTempFile("lua", ".tmp");
+			return Files.newByteChannel(path, StandardOpenOption.READ, StandardOpenOption.WRITE,
+					StandardOpenOption.DELETE_ON_CLOSE);
+		};
 	}
 
 }

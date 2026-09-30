@@ -48,7 +48,11 @@ import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
 import java.util.Objects;
+import java.util.Set;
+import java.util.WeakHashMap;
 import net.sandius.rembulan.ByteString;
 import net.sandius.rembulan.LuaRuntimeException;
 import net.sandius.rembulan.Metatables;
@@ -56,6 +60,7 @@ import net.sandius.rembulan.StateContext;
 import net.sandius.rembulan.Table;
 import net.sandius.rembulan.TableFactory;
 import net.sandius.rembulan.env.RuntimeEnvironment;
+import net.sandius.rembulan.env.TempFileFactory;
 import net.sandius.rembulan.impl.UnimplementedFunction;
 import net.sandius.rembulan.lib.io.InputStreamIoFile;
 import net.sandius.rembulan.lib.io.InputStreamIoFile2;
@@ -420,6 +425,7 @@ public final class IoLib {
   private final Table fileMetatable;
 
   private final FileSystem fileSystem;
+  private final TempFileFactory tempFileFactory;
 
   private final IoFile stdIn;
   private final IoFile stdOut;
@@ -428,8 +434,11 @@ public final class IoLib {
   private IoFile defaultInput;
   private IoFile defaultOutput;
 
-  private IoLib(TableFactory tableFactory, FileSystem fileSystem, InputStream in, OutputStream out,
-      OutputStream err) {
+  /** The files opened by name or as temporary files, weakly, so that forgotten ones can be GCed. */
+  private final Set<IoFile> openedFiles = Collections.newSetFromMap(new WeakHashMap<>());
+
+  private IoLib(TableFactory tableFactory, FileSystem fileSystem,
+      TempFileFactory tempFileFactory, InputStream in, OutputStream out, OutputStream err) {
 
     Objects.requireNonNull(tableFactory);
 
@@ -450,6 +459,7 @@ public final class IoLib {
     mt.rawset("write", file_write());
 
     this.fileSystem = fileSystem;
+    this.tempFileFactory = tempFileFactory;
 
     stdIn = in != null ? new InputStreamIoFile(in, mt, null) : null;
     stdOut = out != null ? new OutputStreamIoFile(out, mt, null) : null;
@@ -482,10 +492,12 @@ public final class IoLib {
    * @param context the state context, must not be {@code null}
    * @param env the global environment, must not be {@code null}
    * @param runtimeEnvironment the runtime environment, may be {@code null}
+   * @return the installed library, so that the host can {@linkplain #closeAll() close its files}
+   *         when the Lua program ends
    *
    * @throws NullPointerException if {@code context} or {@code env} is {@code null}
    */
-  public static void installInto(StateContext context, Table env,
+  public static IoLib installInto(StateContext context, Table env,
       RuntimeEnvironment runtimeEnvironment) {
     Objects.requireNonNull(context);
     Objects.requireNonNull(env);
@@ -493,11 +505,13 @@ public final class IoLib {
     Table t = context.newTable();
 
     FileSystem fileSystem = runtimeEnvironment != null ? runtimeEnvironment.fileSystem() : null;
+    TempFileFactory tempFileFactory =
+        runtimeEnvironment != null ? runtimeEnvironment.tempFileFactory() : null;
     InputStream in = runtimeEnvironment != null ? runtimeEnvironment.standardInput() : null;
     OutputStream out = runtimeEnvironment != null ? runtimeEnvironment.standardOutput() : null;
     OutputStream err = runtimeEnvironment != null ? runtimeEnvironment.standardError() : null;
 
-    IoLib l = new IoLib(context, fileSystem, in, out, err);
+    IoLib l = new IoLib(context, fileSystem, tempFileFactory, in, out, err);
 
     t.rawset("close", l._close);
     t.rawset("flush", l._flush);
@@ -516,8 +530,37 @@ public final class IoLib {
     t.rawset("stderr", l.stdErr);
 
     ModuleLib.install(env, "io", t);
+    return l;
   }
 
+  /**
+   * Closes the files that the Lua program opened and left open, which also removes its temporary
+   * files. The standard files stay open. The host calls this when the Lua program ends: a closed
+   * file cannot be used again.
+   */
+  public void closeAll() {
+    List<IoFile> files;
+    synchronized (openedFiles) {
+      files = new ArrayList<>(openedFiles);
+      openedFiles.clear();
+    }
+    for (IoFile file : files) {
+      if (!file.isClosed()) {
+        try {
+          file.close();
+        } catch (Exception ex) {
+          // nobody is left to report it to, so go on with the others
+        }
+      }
+    }
+  }
+
+  private IoFile track(IoFile file) {
+    synchronized (openedFiles) {
+      openedFiles.add(file);
+    }
+    return file;
+  }
 
   private IoFile openFile(ByteString filename, Open.Mode mode) throws IOException {
     Objects.requireNonNull(filename);
@@ -532,17 +575,17 @@ public final class IoLib {
     try {
       switch (mode) {
         case READ:
-          return openFileForRead(path);
+          return track(openFileForRead(path));
         case WRITE:
-          return openFileForWrite(path);
+          return track(openFileForWrite(path));
         case APPEND:
-          return openFileForAppend(path);
+          return track(openFileForAppend(path));
         case UPDATE_READ:
-          return openFileForUpdateRead(path);
+          return track(openFileForUpdateRead(path));
         case UPDATE_WRITE:
-          return openFileForUpdateWrite(path);
+          return track(openFileForUpdateWrite(path));
         case UPDATE_APPEND:
-          return openFileForUpdateAppend(path);
+          return track(openFileForUpdateAppend(path));
         default:
           throw new UnsupportedOperationException(
               "open file with mode " + mode + " is not supported right now");
@@ -550,6 +593,14 @@ public final class IoLib {
     } catch (NoSuchFileException ex) {
       throw new NoSuchFileException(filename.toString());
     }
+  }
+
+  private IoFile openTempFile() throws IOException {
+    if (tempFileFactory == null) {
+      throw new UnsupportedOperationException("temporary files are not available");
+    }
+    SeekableByteChannel channel = tempFileFactory.newTempFile();
+    return track(new ReadWriteIoFile(channel, false, this.fileMetatable, null));
   }
 
   private InputStreamIoFile2 openFileForRead(Path path) throws IOException {
@@ -975,11 +1026,35 @@ public final class IoLib {
 
   }
 
-  static class TmpFile extends UnimplementedFunction {
-    // TODO
+  static class TmpFile extends AbstractLibFunction {
+
+    private final IoLib lib;
+
     public TmpFile(IoLib lib) {
-      super("io.tmpfile");
+      this.lib = Objects.requireNonNull(lib);
     }
+
+    @Override
+    protected String name() {
+      return "tmpfile";
+    }
+
+    @Override
+    protected void invoke(ExecutionContext context, ArgumentIterator args)
+        throws ResolvedControlThrowable {
+      final IoFile file;
+      try {
+        file = lib.openTempFile();
+      } catch (UnsupportedOperationException ex) {
+        // the runtime environment provides no temporary files
+        throw newLuaRuntimeException(ex);
+      } catch (Exception ex) {
+        setErrorMessage(context.getReturnBuffer(), ex);
+        return;
+      }
+      context.getReturnBuffer().setTo(file);
+    }
+
   }
 
   static class Write extends AbstractLibFunction {
