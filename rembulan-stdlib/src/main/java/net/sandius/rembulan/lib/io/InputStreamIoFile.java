@@ -24,11 +24,13 @@ import net.sandius.rembulan.lib.IoFile;
 
 public class InputStreamIoFile extends IoFile {
 
-  private final SeekableInputStream in;
+  private final InputStreamChannel channel;
+  private final ChannelReader reader;
 
   public InputStreamIoFile(InputStream in, Table metatable, Object userValue) {
     super(metatable, userValue);
-    this.in = new SeekableInputStream(Objects.requireNonNull(in));
+    this.channel = new InputStreamChannel(Objects.requireNonNull(in));
+    this.reader = new ChannelReader(channel);
   }
 
   @Override
@@ -53,37 +55,41 @@ public class InputStreamIoFile extends IoFile {
 
   @Override
   public long seek(IoFile.Whence whence, long offset) throws IOException {
+    // Only the unread bytes the channel still holds can be reached, see InputStreamChannel
     switch (whence) {
       case BEGINNING:
+        channel.position(offset);
+        break;
       case END:
-        return in.setPosition(offset);
-
+        channel.position(channel.size() + offset);
+        break;
       case CURRENT_POSITION:
-        return in.addPosition(offset);
-
+        channel.position(channel.position() + offset);
+        break;
       default:
         throw new IllegalArgumentException("Illegal whence: " + whence);
     }
+    return channel.position();
   }
 
   @Override
   public ByteString readLine(boolean returnEol) throws IOException {
-    throw new UnsupportedOperationException("not implemented");
+    return reader.readLine(returnEol);
   }
-  
+
   @Override
   public Number readNumber() throws IOException {
-    throw new UnsupportedOperationException("not implemented");
+    return reader.readNumber();
   }
 
   @Override
   public ByteString readRestOfFile() throws IOException {
-    throw new UnsupportedOperationException("not implemented");
+    return reader.readRestOfFile();
   }
 
   @Override
   public ByteString readChunk(long len) throws IOException {
-    throw new UnsupportedOperationException("not implemented");
+    return reader.readChunk(len);
   }
 
 }

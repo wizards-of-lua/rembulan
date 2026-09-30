@@ -15,7 +15,6 @@ package net.sandius.rembulan.lib.io;
 
 import java.io.IOException;
 import java.io.OutputStream;
-import java.nio.ByteBuffer;
 import java.nio.channels.Channels;
 import java.nio.channels.SeekableByteChannel;
 import java.util.Objects;
@@ -41,14 +40,8 @@ import net.sandius.rembulan.lib.IoFile;
  */
 public class ChannelIoFile extends IoFile {
 
-  private final ByteBuffer byteBuffer = ByteBuffer.wrap(new byte[16]);
-  private final NumberTokenizer numberTokenizer = new NumberTokenizer(byteBuffer);
-  private final LineTokenizer lineTokenizer = new LineTokenizer(byteBuffer);
-  private final LineTokenizer lineWithEoLTokenizer = new LineTokenizer(byteBuffer, true);
-  private final RestOfFileTokenizer restOfFileTokenizer = new RestOfFileTokenizer(byteBuffer);
-  private final ChunkTokenizer chunkTokenizer = new ChunkTokenizer(byteBuffer);
-
   private final SeekableByteChannel channel;
+  private final ChannelReader reader;
   private final OutputStream out;
   private final boolean readable;
   private final boolean writable;
@@ -76,6 +69,7 @@ public class ChannelIoFile extends IoFile {
       boolean appendWrites, Table metatable, Object userValue) {
     super(metatable, userValue);
     this.channel = Objects.requireNonNull(channel);
+    this.reader = new ChannelReader(channel);
     this.out = Channels.newOutputStream(channel);
     this.readable = readable;
     this.writable = writable;
@@ -145,26 +139,25 @@ public class ChannelIoFile extends IoFile {
   @Override
   public ByteString readLine(boolean returnEol) throws IOException {
     checkReadable();
-    return returnEol ? lineWithEoLTokenizer.nextToken(channel) : lineTokenizer.nextToken(channel);
+    return reader.readLine(returnEol);
   }
 
   @Override
   public Number readNumber() throws IOException {
     checkReadable();
-    return numberTokenizer.nextToken(channel);
+    return reader.readNumber();
   }
 
   @Override
   public ByteString readRestOfFile() throws IOException {
     checkReadable();
-    return restOfFileTokenizer.nextToken(channel);
+    return reader.readRestOfFile();
   }
 
   @Override
   public ByteString readChunk(long len) throws IOException {
     checkReadable();
-    chunkTokenizer.setLength(len);
-    return chunkTokenizer.nextToken(channel);
+    return reader.readChunk(len);
   }
 
 }
