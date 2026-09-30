@@ -20,13 +20,14 @@ import java.util.List;
 
 import net.sandius.rembulan.ByteString;
 import net.sandius.rembulan.Conversions;
+import net.sandius.rembulan.LuaRuntimeException;
 import net.sandius.rembulan.Table;
 import net.sandius.rembulan.impl.DefaultUserdata;
 import net.sandius.rembulan.impl.NonsuspendableFunctionException;
 import net.sandius.rembulan.runtime.AbstractFunctionAnyArg;
 import net.sandius.rembulan.runtime.ExecutionContext;
-import net.sandius.rembulan.runtime.LuaFunction;
 import net.sandius.rembulan.runtime.ResolvedControlThrowable;
+import net.sandius.rembulan.runtime.ReturnBuffer;
 
 /**
  * A file handle used by the {@link IoLib I/O library}.
@@ -47,7 +48,7 @@ public abstract class IoFile extends DefaultUserdata {
 
   @Override
   public String toString() {
-    return "file (0x" + Integer.toHexString(hashCode()) + ")";
+    return isClosed() ? "file (closed)" : "file (0x" + Integer.toHexString(hashCode()) + ")";
   }
 
   @Override
@@ -123,28 +124,48 @@ public abstract class IoFile extends DefaultUserdata {
 
   ///
 
-  static class DelegatingFunction extends AbstractFunctionAnyArg {
+  /**
+   * The iterator of {@code file:lines} and {@code io.lines}: reads with the given formats on each
+   * call and returns nothing at the end of the file, closing it if {@code closeAtEof}. Like Lua 5.3,
+   * it raises an error when a read fails or the file is already closed.
+   */
+  static class LinesIterator extends AbstractFunctionAnyArg {
 
-    private LuaFunction function;
-    private Object[] args;
+    private final Read read = new Read();
+    private final IoFile file;
+    private final Object[] readArgs;
+    private final boolean closeAtEof;
 
-    public DelegatingFunction(Object delegate, LuaFunction function, ArgumentIterator arguments) {
-      this.function = function;
-      int argCount = arguments.remaining();
-      if (argCount == 0) {
-        this.args = new Object[] {delegate};
-      } else {
-        this.args = new Object[argCount + 1];
-        for (int i = 0; i < argCount; ++i) {
-          this.args[i + 1] = arguments.next();
-        }
-        this.args[0] = delegate;
-      }
+    LinesIterator(IoFile file, Object[] formats, boolean closeAtEof) {
+      this.file = file;
+      this.readArgs = new Object[formats.length + 1];
+      this.readArgs[0] = file;
+      System.arraycopy(formats, 0, this.readArgs, 1, formats.length);
+      this.closeAtEof = closeAtEof;
     }
 
     @Override
     public void invoke(ExecutionContext context, Object[] args) throws ResolvedControlThrowable {
-      function.invoke(context, this.args);
+      if (file.isClosed()) {
+        throw new LuaRuntimeException("file is already closed");
+      }
+      read.invoke(context, readArgs);
+      ReturnBuffer result = context.getReturnBuffer();
+      if (result.size() > 0 && result.get0() != null) {
+        return;
+      }
+      if (result.size() > 1) {
+        // read stops at the first nil, so a second value is an error message
+        throw new LuaRuntimeException(result.get1());
+      }
+      if (closeAtEof) {
+        try {
+          file.close();
+        } catch (Exception ex) {
+          throw IoLib.newLuaRuntimeException(ex);
+        }
+      }
+      result.setTo();
     }
 
     @Override
@@ -171,6 +192,7 @@ public abstract class IoFile extends DefaultUserdata {
       final IoFile f = args.nextUserdata(typeName(), IoFile.class);
 
       try {
+        f.checkClosed();
         f.close();
       } catch (ClosedFileException ex) {
         throw IoLib.newLuaRuntimeException(ex);
@@ -222,9 +244,8 @@ public abstract class IoFile extends DefaultUserdata {
         f.checkClosed();
       } catch (Exception ex) {
         throw IoLib.newLuaRuntimeException(ex);
-      } 
-      DelegatingFunction nextLineFunc = new DelegatingFunction(f, new Read(), args);
-      context.getReturnBuffer().setTo(nextLineFunc);
+      }
+      context.getReturnBuffer().setTo(new LinesIterator(f, args.copyRemaining(), false));
     }
 
   }
@@ -244,36 +265,48 @@ public abstract class IoFile extends DefaultUserdata {
       final IoFile f = args.nextUserdata(typeName(), IoFile.class);
       List<Object> result = new ArrayList<>();
       try {
+        f.checkClosed();
         do {
           Object formatSpecfifier = args.nextOptionalAny(DEFAULT_SPEC);
           Format format = Format.get(formatSpecfifier);
+          final Object value;
           switch (format) {
             case NEXT_LINE:
-              result.add(f.readLine(false));
+              value = f.readLine(false);
               break;
             case NEXT_LINE_WITH_EOL:
-              result.add(f.readLine(true));
+              value = f.readLine(true);
               break;
             case AS_NUMBER:
-              Number number = f.readNumber();
-              result.add(number);
+              value = f.readNumber();
               break;
             case WHOLE_FILE:
               ByteString text = f.readRestOfFile();
               // "a" never fails: at the end of the file it reads the empty string
-              result.add(text != null ? text : ByteString.empty());
+              value = text != null ? text : ByteString.empty();
               break;
             case NUMBER_OF_CHARACTERS:
               Long len = Conversions.integerValueOf(formatSpecfifier);
-              ByteString chunk = f.readChunk(len);
-              result.add(chunk);
+              if (len == null) {
+                throw new IllegalArgumentException("number has no integer representation");
+              }
+              value = f.readChunk(len);
               break;
             default:
               throw new UnsupportedOperationException("Unsupported format: " + format);
           }
+          result.add(value);
+          if (value == null) {
+            // like Lua 5.3, stop at the first format that fails
+            break;
+          }
         } while (args.hasNext());
-      } catch (Exception ex) {
+      } catch (ClosedFileException | IllegalArgumentException ex) {
         throw IoLib.newLuaRuntimeException(ex);
+      } catch (Exception ex) {
+        // e.g. reading a file opened for writing only
+        IoLib.setErrorMessage(context.getReturnBuffer(), ex);
+        return;
       }
       context.getReturnBuffer().setToContentsOf(result);
     }
@@ -346,7 +379,19 @@ public abstract class IoFile extends DefaultUserdata {
     @Override
     protected void invoke(ExecutionContext context, ArgumentIterator args)
         throws ResolvedControlThrowable {
-      throw new UnsupportedOperationException(); // TODO
+      IoFile file = args.nextUserdata(typeName(), IoFile.class);
+      try {
+        file.checkClosed();
+      } catch (ClosedFileException ex) {
+        throw IoLib.newLuaRuntimeException(ex);
+      }
+      String mode = args.nextString().toString();
+      if (!mode.equals("no") && !mode.equals("full") && !mode.equals("line")) {
+        throw new BadArgumentException(1, name(), "invalid option '" + mode + "'");
+      }
+      args.nextOptionalInteger(0L); // the buffer size
+      // The files keep their own buffering, so any mode is accepted as it is
+      context.getReturnBuffer().setTo(true);
     }
 
   }

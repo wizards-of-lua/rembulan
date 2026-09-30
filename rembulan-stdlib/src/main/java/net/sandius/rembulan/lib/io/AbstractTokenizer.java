@@ -55,13 +55,18 @@ public abstract class AbstractTokenizer<R> {
 
     channel.position(mark + skip + output.size());
 
-    if (output.size() == 0 && skip == 0) {
+    if (!hasResult()) {
       return null;
     } else {
       //byte[] bytes = output.toByteArray();
       R result = toResult();
       return result;
     }
+  }
+
+  /** Whether the last token has a result, or else reading it failed at the end of the file. */
+  protected boolean hasResult() {
+    return output.size() != 0 || skip != 0;
   }
 
   protected abstract void reset();

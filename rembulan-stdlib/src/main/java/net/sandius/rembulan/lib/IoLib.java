@@ -735,11 +735,51 @@ public final class IoLib {
    * 
    * @see http://www.lua.org/manual/5.3/manual.html#6.8
    */
-  static class Lines extends UnimplementedFunction {
-    // TODO
+  static class Lines extends AbstractLibFunction {
+
+    private final IoLib lib;
+
     public Lines(IoLib lib) {
-      super("io.lines");
+      this.lib = Objects.requireNonNull(lib);
     }
+
+    @Override
+    protected String name() {
+      return "lines";
+    }
+
+    @Override
+    protected void invoke(ExecutionContext context, ArgumentIterator args)
+        throws ResolvedControlThrowable {
+      final IoFile file;
+      final boolean closeAtEof;
+      if (!args.hasNext() || args.peek() == null) {
+        if (args.hasNext()) {
+          args.skip();
+        }
+        file = lib.getDefaultInputFile();
+        if (file == null) {
+          throw new LuaRuntimeException("no default input file");
+        }
+        try {
+          file.checkClosed();
+        } catch (ClosedFileException ex) {
+          throw newLuaRuntimeException(ex);
+        }
+        closeAtEof = false;
+      } else {
+        ByteString filename = args.nextString();
+        try {
+          file = lib.openFile(filename, Open.Mode.READ);
+        } catch (Exception ex) {
+          throw newLuaRuntimeException(ex);
+        }
+        closeAtEof = true;
+      }
+      context.getReturnBuffer()
+          .setTo(new IoFile.LinesIterator(file, args.copyRemaining(), closeAtEof));
+    }
+
   }
 
   static class Open extends AbstractLibFunction {
@@ -856,8 +896,8 @@ public final class IoLib {
         context.getReturnBuffer().setTo(f);
       } else {
         // return the default output file
-        IoFile inFile = lib.getDefaultInputFile();
-        context.getReturnBuffer().setTo(inFile);
+        IoFile outFile = lib.getDefaultOutputFile();
+        context.getReturnBuffer().setTo(outFile);
       }
     }
 

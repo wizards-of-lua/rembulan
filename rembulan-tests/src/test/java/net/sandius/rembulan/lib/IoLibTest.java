@@ -1392,4 +1392,547 @@ public class IoLibTest extends TestBase {
     assertThat(actual).isEqualTo(new Object[] {false, false});
   }
 
+  // -------------------------------------------------------------------------
+  // io.type, io.open
+  // -------------------------------------------------------------------------
+
+  @Test
+  public void test_io_type() throws Exception {
+    // Given:
+    Path path = createTempFile("hello");
+    String program = "" //
+        + "local file = io.open(..., 'r')\n" //
+        + "local open = io.type(file)\n" //
+        + "file:close()\n" //
+        + "return io.type(42), io.type({}), open, io.type(file)\n";
+
+    // When:
+    Object[] actual = run(program, path.toString());
+
+    // Then:
+    assertThat(actual).isEqualTo(new Object[] {null, null, "file", "closed file"});
+  }
+
+  @Test
+  public void test_io_open__missing_file_returns_nil_and_message() throws Exception {
+    // Given:
+    Path path = createTempFilename(); // path that does not exist
+    String program = "" //
+        + "local file, msg = io.open(..., 'r')\n" //
+        + "return file, type(msg)\n";
+
+    // When:
+    Object[] actual = run(program, path.toString());
+
+    // Then:
+    assertThat(actual[0]).isNull();
+    assertThat(actual[1]).isEqualTo("string");
+  }
+
+  @Test
+  public void test_io_open__invalid_mode_raises_an_error() throws Exception {
+    // Given:
+    Path path = createTempFile("hello");
+    String program = "return pcall(io.open, ..., 'rw')\n";
+
+    // When:
+    Object[] actual = run(program, path.toString());
+
+    // Then:
+    assertThat(actual[0]).isEqualTo(false);
+  }
+
+  // -------------------------------------------------------------------------
+  // Default files: io.input, io.read, io.output, io.write, io.close, io.flush
+  // -------------------------------------------------------------------------
+
+  @Test
+  public void test_io_input_and_io_read() throws Exception {
+    // Given:
+    Path path = createTempFile("one\ntwo\nrest");
+    String program = "" //
+        + "local file = io.input(...)\n" //
+        + "local same = io.input() == file\n" //
+        + "local a, b = io.read(), io.read('L')\n" //
+        + "local rest = io.read('a')\n" //
+        + "io.close(file)\n" //
+        + "return io.type(file), same, a, b, rest\n";
+
+    // When:
+    Object[] actual = run(program, path.toString());
+
+    // Then:
+    assertThat(actual).isEqualTo(new Object[] {"closed file", true, "one", "two\n", "rest"});
+  }
+
+  @Test
+  public void test_io_output_io_write_and_io_close() throws Exception {
+    // Given:
+    Path path = createTempFilename(); // path that does not exist
+    String program = "" //
+        + "local file = io.output(...)\n" //
+        + "io.write('a', 1, 'b')\n" //
+        + "local flushed = io.flush()\n" //
+        + "local closed = io.close()\n" //
+        + "return io.type(file), flushed, closed\n";
+
+    // When:
+    Object[] actual = run(program, path.toString());
+
+    // Then:
+    assertThat(actual).isEqualTo(new Object[] {"closed file", true, true});
+    assertThat(readFile(path)).isEqualTo("a1b");
+  }
+
+  @Test
+  public void test_File_flush() throws Exception {
+    // Given:
+    Path path = createTempFilename(); // path that does not exist
+    String program = "" //
+        + "local file = io.open(..., 'w')\n" //
+        + "file:write('hello')\n" //
+        + "local flushed = file:flush()\n" //
+        + "file:close()\n" //
+        + "return flushed\n";
+
+    // When:
+    Object[] actual = run(program, path.toString());
+
+    // Then:
+    assertThat(actual[0]).isEqualTo(true);
+    assertThat(readFile(path)).isEqualTo("hello");
+  }
+
+  // -------------------------------------------------------------------------
+  // Edge cases of read, lines, seek and write
+  // -------------------------------------------------------------------------
+
+  @Test
+  public void test_File_read__zero_characters() throws Exception {
+    // Given:
+    Path path = createTempFile("x");
+    Path empty = createTempFile("");
+
+    // When: read(0) tests for end of file: "" before it, nil at it
+    Object[] actual = run(READ_FORMATS_PROGRAM, path.toString(), 0, 1, 0, "a");
+    Object[] actualEmpty = run(READ_FORMATS_PROGRAM, empty.toString(), 0, "a", "a", "a");
+
+    // Then:
+    assertThat(actual[0]).isEqualTo("");
+    assertThat(actual[2]).isNull();
+    assertThat(actualEmpty[0]).isNull();
+  }
+
+  @Test
+  public void test_File_read__number_fails_on_text() throws Exception {
+    // Given:
+    Path path = createTempFile("x");
+
+    // When:
+    Object[] actual = run(READ_FORMATS_PROGRAM, path.toString(), "n", "a", "a", "a");
+
+    // Then:
+    assertThat(actual[0]).isNull();
+  }
+
+  @Test
+  public void test_File_lines__numbers() throws Exception {
+    // Given:
+    Path path = createTempFile("1 2.5 3");
+    String program = "" //
+        + "local file = io.open(..., 'r')\n" //
+        + "local result = {}\n" //
+        + "for n in file:lines('n') do result[#result + 1] = n end\n" //
+        + "file:close()\n" //
+        + "return table.unpack(result)\n";
+
+    // When:
+    Object[] actual = run(program, path.toString());
+
+    // Then:
+    assertThat(actual).isEqualTo(new Object[] {1L, 2.5, 3L});
+  }
+
+  @Test
+  public void test_File_lines__several_formats() throws Exception {
+    // Given:
+    Path path = createTempFile("a\nb\nc\nd\n");
+    String program = "" //
+        + "local file = io.open(..., 'r')\n" //
+        + "local result = ''\n" //
+        + "for x, y in file:lines('l', 'l') do result = result .. x .. y .. ',' end\n" //
+        + "file:close()\n" //
+        + "return result\n";
+
+    // When:
+    Object[] actual = run(program, path.toString());
+
+    // Then:
+    assertThat(actual[0]).isEqualTo("ab,cd,");
+  }
+
+  @Test
+  public void test_File_seek__defaults_to_current_position() throws Exception {
+    // Given:
+    Path path = createTempFile("hello");
+    String program = "" //
+        + "local file = io.open(..., 'r')\n" //
+        + "local before = file:seek()\n" //
+        + "file:read(2)\n" //
+        + "local after = file:seek()\n" //
+        + "local fromCur = file:seek('cur')\n" //
+        + "file:close()\n" //
+        + "return before, after, fromCur\n";
+
+    // When:
+    Object[] actual = run(program, path.toString());
+
+    // Then:
+    assertThat(actual).isEqualTo(new Object[] {0L, 2L, 2L});
+  }
+
+  @Test
+  public void test_File_seek__invalid_option_raises_an_error() throws Exception {
+    // Given:
+    Path path = createTempFile("hello");
+    String program = "" //
+        + "local file = io.open(..., 'r')\n" //
+        + "local ok = pcall(file.seek, file, 'foo')\n" //
+        + "file:close()\n" //
+        + "return ok\n";
+
+    // When:
+    Object[] actual = run(program, path.toString());
+
+    // Then:
+    assertThat(actual[0]).isEqualTo(false);
+  }
+
+  @Test
+  public void test_File_write__table_raises_an_error() throws Exception {
+    // Given:
+    Path path = createTempFilename(); // path that does not exist
+    String program = "" //
+        + "local file = io.open(..., 'w')\n" //
+        + "local ok = pcall(file.write, file, {})\n" //
+        + "file:close()\n" //
+        + "return ok\n";
+
+    // When:
+    Object[] actual = run(program, path.toString());
+
+    // Then:
+    assertThat(actual[0]).isEqualTo(false);
+  }
+
+  @Test
+  public void test_File_write__returns_the_file() throws Exception {
+    // Given:
+    Path path = createTempFilename(); // path that does not exist
+    String program = "" //
+        + "local file = io.open(..., 'w')\n" //
+        + "local same = file:write('a'):write('b') == file\n" //
+        + "file:close()\n" //
+        + "return same\n";
+
+    // When:
+    Object[] actual = run(program, path.toString());
+
+    // Then:
+    assertThat(actual[0]).isEqualTo(true);
+    assertThat(readFile(path)).isEqualTo("ab");
+  }
+
+  // -------------------------------------------------------------------------
+  // Deviations from Lua 5.3, fixed (#17 - #24)
+  // -------------------------------------------------------------------------
+
+  @Test
+  public void test_io_output__without_argument_returns_the_default_output_file()
+      throws Exception {
+    // Given:
+    Path path = createTempFilename(); // path that does not exist
+    String program = "" //
+        + "local file = io.output(...)\n" //
+        + "local same = io.output() == file\n" //
+        + "io.close()\n" //
+        + "return same\n";
+
+    // When:
+    Object[] actual = run(program, path.toString());
+
+    // Then:
+    assertThat(actual[0]).isEqualTo(true);
+  }
+
+  @Test
+  public void test_File_read__zero_characters_consumes_nothing() throws Exception {
+    // Given:
+    Path path = createTempFile("xy");
+
+    // When:
+    Object[] actual = run(READ_FORMATS_PROGRAM, path.toString(), 0, 1, 0, "a");
+
+    // Then:
+    assertThat(actual).isEqualTo(new Object[] {"", "x", "", "y"});
+  }
+
+  @Test
+  public void test_File_read__stops_at_the_first_format_that_fails() throws Exception {
+    // Given:
+    Path path = createTempFile("x\n");
+    String program = "" //
+        + "local file = io.open(..., 'r')\n" //
+        + "local n = select('#', file:read('l', 'l', 'l'))\n" //
+        + "file:close()\n" //
+        + "file = io.open(..., 'r')\n" //
+        + "local a, b = file:read('l', 'l', 'l')\n" //
+        + "file:close()\n" //
+        + "return n, a, b\n";
+
+    // When:
+    Object[] actual = run(program, path.toString());
+
+    // Then:
+    assertThat(actual).isEqualTo(new Object[] {2L, "x", null});
+  }
+
+  @Test
+  public void test_File_close__closing_a_closed_file_raises_an_error() throws Exception {
+    // Given:
+    Path path = createTempFile("hello");
+    String program = "" //
+        + "local file = io.open(..., 'r')\n" //
+        + "file:close()\n" //
+        + "return pcall(file.close, file)\n";
+
+    // When:
+    Object[] actual = run(program, path.toString());
+
+    // Then:
+    assertThat(actual[0]).isEqualTo(false);
+  }
+
+  @Test
+  public void test_File_tostring() throws Exception {
+    // Given:
+    Path path = createTempFile("hello");
+    String program = "" //
+        + "local file = io.open(..., 'r')\n" //
+        + "local open = tostring(file)\n" //
+        + "file:close()\n" //
+        + "return open:match('^file %(.+%)$') ~= nil, tostring(file)\n";
+
+    // When:
+    Object[] actual = run(program, path.toString());
+
+    // Then:
+    assertThat(actual).isEqualTo(new Object[] {true, "file (closed)"});
+  }
+
+  @Test
+  public void test_File_read__write_only_file_returns_nil_and_message() throws Exception {
+    // Given:
+    Path path = createTempFile("hello");
+    String program = "" //
+        + "local file = io.open(..., 'a')\n" //
+        + "local ok, value, msg = pcall(file.read, file, 'a')\n" //
+        + "file:close()\n" //
+        + "return ok, value, type(msg)\n";
+
+    // When:
+    Object[] actual = run(program, path.toString());
+
+    // Then:
+    assertThat(actual).isEqualTo(new Object[] {true, null, "string"});
+  }
+
+  @Test
+  public void test_File_setvbuf() throws Exception {
+    // Given:
+    Path path = createTempFilename(); // path that does not exist
+    String program = "" //
+        + "local file = io.open(..., 'w')\n" //
+        + "local a, b, c = file:setvbuf('no'), file:setvbuf('full', 1024), file:setvbuf('line')\n" //
+        + "file:close()\n" //
+        + "return a, b, c\n";
+
+    // When:
+    Object[] actual = run(program, path.toString());
+
+    // Then:
+    assertThat(actual).isEqualTo(new Object[] {true, true, true});
+  }
+
+  @Test
+  public void test_io_lines() throws Exception {
+    // Given:
+    Path path = createTempFile("one\ntwo\n");
+    String program = "" //
+        + "local result = ''\n" //
+        + "for line in io.lines(...) do result = result .. '[' .. line .. ']' end\n" //
+        + "for a, b in io.lines(..., 1, 'l') do result = result .. a .. '|' .. b end\n" //
+        + "return result\n";
+
+    // When:
+    Object[] actual = run(program, path.toString());
+
+    // Then:
+    assertThat(actual[0]).isEqualTo("[one][two]o|net|wo");
+  }
+
+  @Test
+  public void test_io_lines__closes_the_file_at_its_end() throws Exception {
+    // Given:
+    Path path = createTempFile("one\n");
+    String program = "" //
+        + "local iterator = io.lines(...)\n" //
+        + "for line in iterator do end\n" //
+        + "return pcall(iterator)\n";
+
+    // When:
+    Object[] actual = run(program, path.toString());
+
+    // Then:
+    assertThat(actual).isEqualTo(new Object[] {false, "file is already closed"});
+  }
+
+  @Test
+  public void test_io_lines__without_file_name_reads_the_default_input_and_keeps_it_open()
+      throws Exception {
+    // Given:
+    Path path = createTempFile("one\ntwo\n");
+    String program = "" //
+        + "local file = io.input(...)\n" //
+        + "local result = ''\n" //
+        + "for line in io.lines() do result = result .. '[' .. line .. ']' end\n" //
+        + "for n in io.lines(nil, 'n') do result = result .. n end\n" //
+        + "return result, io.type(file)\n";
+
+    // When:
+    Object[] actual = run(program, path.toString());
+
+    // Then:
+    assertThat(actual).isEqualTo(new Object[] {"[one][two]", "file"});
+  }
+
+  @Test
+  public void test_io_lines__missing_file_raises_an_error() throws Exception {
+    // Given:
+    Path path = createTempFilename(); // path that does not exist
+    String program = "return pcall(io.lines, ...)\n";
+
+    // When:
+    Object[] actual = run(program, path.toString());
+
+    // Then:
+    assertThat(actual[0]).isEqualTo(false);
+  }
+
+  @Test
+  public void test_File_lines__closed_file_raises_an_error() throws Exception {
+    // Given:
+    Path path = createTempFile("one\ntwo\n");
+    String program = "" //
+        + "local file = io.open(..., 'r')\n" //
+        + "local iterator = file:lines()\n" //
+        + "local first = iterator()\n" //
+        + "file:close()\n" //
+        + "local ok = pcall(iterator)\n" //
+        + "return first, ok, pcall(file.lines, file)\n";
+
+    // When:
+    Object[] actual = run(program, path.toString());
+
+    // Then:
+    assertThat(actual[0]).isEqualTo("one");
+    assertThat(actual[1]).isEqualTo(false);
+    assertThat(actual[2]).isEqualTo(false);
+  }
+
+  @Test
+  public void test_File_lines__failed_read_raises_an_error() throws Exception {
+    // Given:
+    Path path = createTempFile("hello");
+    String program = "" //
+        + "local file = io.open(..., 'a')\n" //
+        + "local ok = pcall(file:lines())\n" //
+        + "file:close()\n" //
+        + "return ok\n";
+
+    // When:
+    Object[] actual = run(program, path.toString());
+
+    // Then:
+    assertThat(actual[0]).isEqualTo(false);
+  }
+
+  @Test
+  public void test_File_read__stops_at_a_number_that_fails() throws Exception {
+    // Given:
+    Path path = createTempFile("x\n");
+    String program = "" //
+        + "local file = io.open(..., 'r')\n" //
+        + "local n = select('#', file:read('n', 'l'))\n" //
+        + "file:close()\n" //
+        + "return n\n";
+
+    // When:
+    Object[] actual = run(program, path.toString());
+
+    // Then:
+    assertThat(actual[0]).isEqualTo(1L);
+  }
+
+  @Test
+  public void test_File_read__closed_file_raises_an_error_also_for_write_only_files()
+      throws Exception {
+    // Given:
+    Path path = createTempFile("hello");
+    String program = "" //
+        + "local file = io.open(..., 'a')\n" //
+        + "file:close()\n" //
+        + "return pcall(file.read, file, 'a')\n";
+
+    // When:
+    Object[] actual = run(program, path.toString());
+
+    // Then:
+    assertThat(actual[0]).isEqualTo(false);
+  }
+
+  @Test
+  public void test_File_setvbuf__invalid_option_raises_an_error() throws Exception {
+    // Given:
+    Path path = createTempFilename(); // path that does not exist
+    String program = "" //
+        + "local file = io.open(..., 'w')\n" //
+        + "local ok = pcall(file.setvbuf, file, 'always')\n" //
+        + "file:close()\n" //
+        + "return ok, pcall(file.setvbuf, file, 'no')\n";
+
+    // When:
+    Object[] actual = run(program, path.toString());
+
+    // Then:
+    assertThat(actual[0]).isEqualTo(false);
+    assertThat(actual[1]).isEqualTo(false);
+  }
+
+  @Test
+  public void test_io_close__closing_a_closed_file_raises_an_error() throws Exception {
+    // Given:
+    Path path = createTempFile("hello");
+    String program = "" //
+        + "local file = io.open(..., 'r')\n" //
+        + "io.close(file)\n" //
+        + "return pcall(io.close, file)\n";
+
+    // When:
+    Object[] actual = run(program, path.toString());
+
+    // Then:
+    assertThat(actual[0]).isEqualTo(false);
+  }
+
 }
