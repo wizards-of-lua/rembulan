@@ -1284,4 +1284,112 @@ public class IoLibTest extends TestBase {
     assertThat(actual).isEqualTo("hello");
   }
 
+  // -------------------------------------------------------------------------
+  // Read formats without '*' (Lua 5.3 makes the '*' optional)
+  // -------------------------------------------------------------------------
+
+  private static final String READ_FORMATS_PROGRAM = "" //
+      + "local filename, f1, f2, f3, f4 = ...\n" //
+      + "local file = io.open(filename, 'r')\n" //
+      + "local a, b, c, d = file:read(f1), file:read(f2), file:read(f3), file:read(f4)\n" //
+      + "file:close()\n" //
+      + "return a, b, c, d\n";
+
+  @Test
+  public void test_File_read__formats_without_star() throws Exception {
+    // Given:
+    Path path = createTempFile("12 34\nsecond line\nrest");
+
+    // When:
+    Object[] actual = run(READ_FORMATS_PROGRAM, path.toString(), "n", "l", "L", "a");
+
+    // Then:
+    assertThat(actual).isEqualTo(new Object[] {12L, " 34", "second line\n", "rest"});
+  }
+
+  @Test
+  public void test_File_read__formats_with_star() throws Exception {
+    // Given:
+    Path path = createTempFile("12 34\nsecond line\nrest");
+
+    // When:
+    Object[] actual = run(READ_FORMATS_PROGRAM, path.toString(), "*n", "*l", "*L", "*a");
+
+    // Then:
+    assertThat(actual).isEqualTo(new Object[] {12L, " 34", "second line\n", "rest"});
+  }
+
+  @Test
+  public void test_File_read__only_the_first_letter_of_a_format_counts() throws Exception {
+    // Given:
+    Path path = createTempFile("12 34\nsecond line\nrest");
+
+    // When:
+    Object[] actual =
+        run(READ_FORMATS_PROGRAM, path.toString(), "number", "*line", "Line", "*all");
+
+    // Then:
+    assertThat(actual).isEqualTo(new Object[] {12L, " 34", "second line\n", "rest"});
+  }
+
+  @Test
+  public void test_File_read__whole_file_at_end_of_file_returns_empty_string() throws Exception {
+    // Given:
+    Path path = createTempFile("hello");
+
+    // When: "a" never fails, it returns "" at the end of the file (unlike "l" and "n")
+    Object[] actual = run(READ_FORMATS_PROGRAM, path.toString(), "a", "a", "*a", "l");
+
+    // Then:
+    assertThat(actual).isEqualTo(new Object[] {"hello", "", "", null});
+  }
+
+  @Test
+  public void test_File_read__whole_file_of_empty_file_returns_empty_string() throws Exception {
+    // Given:
+    Path path = createTempFile("");
+
+    // When:
+    Object[] actual = run(READ_FORMATS_PROGRAM, path.toString(), "a", "l", "a", "n");
+
+    // Then:
+    assertThat(actual).isEqualTo(new Object[] {"", null, "", null});
+  }
+
+  @Test
+  public void test_File_lines__format_without_star() throws Exception {
+    // Given:
+    Path path = createTempFile("one\ntwo\n");
+    String program = "" //
+        + "local file = io.open(..., 'r')\n" //
+        + "local result = ''\n" //
+        + "for line in file:lines('L') do result = result .. '[' .. line .. ']' end\n" //
+        + "file:close()\n" //
+        + "return result\n";
+
+    // When:
+    Object[] actual = run(program, path.toString());
+
+    // Then:
+    assertThat(actual[0]).isEqualTo("[one\n][two\n]");
+  }
+
+  @Test
+  public void test_File_read__unknown_format_raises_an_error() throws Exception {
+    // Given:
+    Path path = createTempFile("hello");
+    String program = "" //
+        + "local file = io.open(..., 'r')\n" //
+        + "local ok = pcall(file.read, file, 'x')\n" //
+        + "local ok2 = pcall(file.read, file, '*')\n" //
+        + "file:close()\n" //
+        + "return ok, ok2\n";
+
+    // When:
+    Object[] actual = run(program, path.toString());
+
+    // Then:
+    assertThat(actual).isEqualTo(new Object[] {false, false});
+  }
+
 }

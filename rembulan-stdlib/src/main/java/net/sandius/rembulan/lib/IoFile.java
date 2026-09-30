@@ -91,21 +91,29 @@ public abstract class IoFile extends DefaultUserdata {
   public enum Format {
     AS_NUMBER, WHOLE_FILE, NEXT_LINE, NEXT_LINE_WITH_EOL, NUMBER_OF_CHARACTERS;
 
+    /**
+     * Like Lua 5.3, the leading '*' is optional and only the first letter after it counts, so
+     * "a", "*a" and "*all" all mean {@link #WHOLE_FILE}.
+     */
     public static Format get(Object specifier) {
-      if (ByteString.of("*n").equals(specifier)) {
-        return Format.AS_NUMBER;
-      }
-      if (ByteString.of("*a").equals(specifier)) {
-        return Format.WHOLE_FILE;
-      }
-      if (ByteString.of("*l").equals(specifier)) {
-        return Format.NEXT_LINE;
-      }
-      if (ByteString.of("*L").equals(specifier)) {
-        return Format.NEXT_LINE_WITH_EOL;
-      }
       if (specifier instanceof Number) {
         return Format.NUMBER_OF_CHARACTERS;
+      }
+      ByteString s = Conversions.stringValueOf(specifier);
+      if (s != null) {
+        int i = s.length() > 0 && s.byteAt(0) == '*' ? 1 : 0;
+        if (i < s.length()) {
+          switch (s.byteAt(i)) {
+            case 'n':
+              return Format.AS_NUMBER;
+            case 'a':
+              return Format.WHOLE_FILE;
+            case 'l':
+              return Format.NEXT_LINE;
+            case 'L':
+              return Format.NEXT_LINE_WITH_EOL;
+          }
+        }
       }
       throw new IllegalArgumentException("Unknown format specifier: '" + specifier + "'");
     }
@@ -252,7 +260,8 @@ public abstract class IoFile extends DefaultUserdata {
               break;
             case WHOLE_FILE:
               ByteString text = f.readRestOfFile();
-              result.add(text);
+              // "a" never fails: at the end of the file it reads the empty string
+              result.add(text != null ? text : ByteString.empty());
               break;
             case NUMBER_OF_CHARACTERS:
               Long len = Conversions.integerValueOf(formatSpecfifier);
