@@ -39,7 +39,6 @@ package net.sandius.rembulan.lib;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.nio.channels.Channels;
 import java.nio.channels.SeekableByteChannel;
 import java.nio.file.FileSystem;
 import java.nio.file.Files;
@@ -62,11 +61,9 @@ import net.sandius.rembulan.TableFactory;
 import net.sandius.rembulan.env.RuntimeEnvironment;
 import net.sandius.rembulan.env.TempFileFactory;
 import net.sandius.rembulan.impl.UnimplementedFunction;
+import net.sandius.rembulan.lib.io.ChannelIoFile;
 import net.sandius.rembulan.lib.io.InputStreamIoFile;
-import net.sandius.rembulan.lib.io.InputStreamIoFile2;
 import net.sandius.rembulan.lib.io.OutputStreamIoFile;
-import net.sandius.rembulan.lib.io.OutputStreamIoFile2;
-import net.sandius.rembulan.lib.io.ReadWriteIoFile;
 import net.sandius.rembulan.runtime.Dispatch;
 import net.sandius.rembulan.runtime.ExecutionContext;
 import net.sandius.rembulan.runtime.LuaFunction;
@@ -600,50 +597,47 @@ public final class IoLib {
       throw new UnsupportedOperationException("temporary files are not available");
     }
     SeekableByteChannel channel = tempFileFactory.newTempFile();
-    return track(new ReadWriteIoFile(channel, false, this.fileMetatable, null));
+    return track(ChannelIoFile.readWrite(channel, false, this.fileMetatable, null));
   }
 
-  private InputStreamIoFile2 openFileForRead(Path path) throws IOException {
+  private IoFile openFileForRead(Path path) throws IOException {
     SeekableByteChannel channel = Files.newByteChannel(path, StandardOpenOption.READ);
-    InputStream in = Channels.newInputStream(channel);
-    return new InputStreamIoFile2(in, channel, this.fileMetatable, null);
+    return ChannelIoFile.readOnly(channel, this.fileMetatable, null);
   }
 
   private IoFile openFileForWrite(Path path) throws IOException {
     SeekableByteChannel channel = Files.newByteChannel(path, StandardOpenOption.WRITE,
         StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.CREATE);
-    OutputStream out = Channels.newOutputStream(channel);
-    return new OutputStreamIoFile2(out, channel, this.fileMetatable, null);
+    return ChannelIoFile.writeOnly(channel, this.fileMetatable, null);
   }
 
   private IoFile openFileForAppend(Path path) throws IOException {
     SeekableByteChannel channel =
         Files.newByteChannel(path, StandardOpenOption.APPEND, StandardOpenOption.CREATE);
-    OutputStream out = Channels.newOutputStream(channel);
-    return new OutputStreamIoFile2(out, channel, this.fileMetatable, null);
+    return ChannelIoFile.writeOnly(channel, this.fileMetatable, null);
   }
 
   private IoFile openFileForUpdateRead(Path path) throws IOException {
     // r+: read/write, file must exist, position at beginning
     SeekableByteChannel channel =
         Files.newByteChannel(path, StandardOpenOption.READ, StandardOpenOption.WRITE);
-    return new ReadWriteIoFile(channel, false, this.fileMetatable, null);
+    return ChannelIoFile.readWrite(channel, false, this.fileMetatable, null);
   }
 
   private IoFile openFileForUpdateWrite(Path path) throws IOException {
     // w+: read/write, truncate existing or create, position at beginning
     SeekableByteChannel channel = Files.newByteChannel(path, StandardOpenOption.READ,
         StandardOpenOption.WRITE, StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.CREATE);
-    return new ReadWriteIoFile(channel, false, this.fileMetatable, null);
+    return ChannelIoFile.readWrite(channel, false, this.fileMetatable, null);
   }
 
   private IoFile openFileForUpdateAppend(Path path) throws IOException {
     // a+: read/write, create if absent, reads from any position, writes always go to EOF.
     // Java NIO does not allow READ + APPEND together, so append-on-write is emulated by
-    // ReadWriteIoFile seeking to EOF before each write.
+    // ChannelIoFile seeking to EOF before each write.
     SeekableByteChannel channel = Files.newByteChannel(path, StandardOpenOption.READ,
         StandardOpenOption.WRITE, StandardOpenOption.CREATE);
-    return new ReadWriteIoFile(channel, true, this.fileMetatable, null);
+    return ChannelIoFile.readWrite(channel, true, this.fileMetatable, null);
   }
 
   private IoFile setDefaultInputFile(IoFile f) {

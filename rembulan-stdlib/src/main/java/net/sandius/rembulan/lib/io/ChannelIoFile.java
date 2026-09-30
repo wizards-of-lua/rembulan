@@ -24,21 +24,22 @@ import net.sandius.rembulan.Table;
 import net.sandius.rembulan.lib.IoFile;
 
 /**
- * A read/write IoFile backed by a single {@link SeekableByteChannel}.
+ * An IoFile backed by a {@link SeekableByteChannel}: a file opened by name, in any Lua mode, or a
+ * temporary file.
  *
  * <p>
- * Used for Lua update modes: {@code "r+"}, {@code "w+"}, and {@code "a+"}. Both reads and writes
- * share the channel's file position, so seeks affect both. For {@code "a+"} semantics, set
- * {@code appendWrites} to {@code true}: each write will then atomically seek to end-of-file before
- * writing.
+ * Reads and writes share the channel's file position, so seeks affect both. Reading a file that is
+ * not readable, or writing one that is not writable, fails with "Bad file descriptor", like in
+ * Lua.
  * </p>
  *
  * <p>
- * Note: Java NIO does not allow opening a channel with both {@code READ} and {@code APPEND}
- * options, so {@code "a+"} append-on-write behaviour is emulated by this class.
+ * For {@code "a+"} semantics, set {@code appendWrites}: each write then seeks to the end of the
+ * file first. Java NIO does not allow opening a channel with both {@code READ} and {@code APPEND}
+ * options, so this emulates it.
  * </p>
  */
-public class ReadWriteIoFile extends IoFile {
+public class ChannelIoFile extends IoFile {
 
   private final ByteBuffer byteBuffer = ByteBuffer.wrap(new byte[16]);
   private final NumberTokenizer numberTokenizer = new NumberTokenizer(byteBuffer);
@@ -49,14 +50,50 @@ public class ReadWriteIoFile extends IoFile {
 
   private final SeekableByteChannel channel;
   private final OutputStream out;
+  private final boolean readable;
+  private final boolean writable;
   private final boolean appendWrites;
 
-  public ReadWriteIoFile(SeekableByteChannel channel, boolean appendWrites, Table metatable,
+  /** A file opened with {@code "r"}. */
+  public static ChannelIoFile readOnly(SeekableByteChannel channel, Table metatable,
       Object userValue) {
+    return new ChannelIoFile(channel, true, false, false, metatable, userValue);
+  }
+
+  /** A file opened with {@code "w"} or {@code "a"} (for which the channel appends). */
+  public static ChannelIoFile writeOnly(SeekableByteChannel channel, Table metatable,
+      Object userValue) {
+    return new ChannelIoFile(channel, false, true, false, metatable, userValue);
+  }
+
+  /** A file opened with {@code "r+"}, {@code "w+"} or {@code "a+"} (with {@code appendWrites}). */
+  public static ChannelIoFile readWrite(SeekableByteChannel channel, boolean appendWrites,
+      Table metatable, Object userValue) {
+    return new ChannelIoFile(channel, true, true, appendWrites, metatable, userValue);
+  }
+
+  private ChannelIoFile(SeekableByteChannel channel, boolean readable, boolean writable,
+      boolean appendWrites, Table metatable, Object userValue) {
     super(metatable, userValue);
     this.channel = Objects.requireNonNull(channel);
     this.out = Channels.newOutputStream(channel);
+    this.readable = readable;
+    this.writable = writable;
     this.appendWrites = appendWrites;
+  }
+
+  private void checkReadable() throws IOException {
+    checkClosed();
+    if (!readable) {
+      throw new UnsupportedOperationException("Bad file descriptor");
+    }
+  }
+
+  private void checkWritable() throws IOException {
+    checkClosed();
+    if (!writable) {
+      throw new UnsupportedOperationException("Bad file descriptor");
+    }
   }
 
   @Override
@@ -77,7 +114,7 @@ public class ReadWriteIoFile extends IoFile {
 
   @Override
   public void write(ByteString s) throws IOException {
-    checkClosed();
+    checkWritable();
     if (appendWrites) {
       channel.position(channel.size());
     }
@@ -107,25 +144,25 @@ public class ReadWriteIoFile extends IoFile {
 
   @Override
   public ByteString readLine(boolean returnEol) throws IOException {
-    checkClosed();
+    checkReadable();
     return returnEol ? lineWithEoLTokenizer.nextToken(channel) : lineTokenizer.nextToken(channel);
   }
 
   @Override
   public Number readNumber() throws IOException {
-    checkClosed();
+    checkReadable();
     return numberTokenizer.nextToken(channel);
   }
 
   @Override
   public ByteString readRestOfFile() throws IOException {
-    checkClosed();
+    checkReadable();
     return restOfFileTokenizer.nextToken(channel);
   }
 
   @Override
   public ByteString readChunk(long len) throws IOException {
-    checkClosed();
+    checkReadable();
     chunkTokenizer.setLength(len);
     return chunkTokenizer.nextToken(channel);
   }
