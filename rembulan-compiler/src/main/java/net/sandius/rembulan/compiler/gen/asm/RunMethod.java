@@ -42,8 +42,12 @@ class RunMethod {
 	public final int LV_RESUME = 2;
 	public final int LV_VARARGS = 3;  // index of the varargs argument, if present
 
-	public static final int ST_SHIFT_SEGMENT  = 24;
-	public static final int ST_SHIFT_LABELIDX = 16;
+	// The state of a segmented function is an int: the segment index, then the index of a block
+	// in that segment (the target of a jump from another segment), then the resumption point in
+	// that segment. The bits of each field are counted per function, since fixed widths (8 bits
+	// for segments and blocks) overflowed in large functions, which then looped endlessly.
+	private final int stShiftSegment;
+	private final int stShiftLabelIdx;
 
 	private final ASMBytecodeEmitter context;
 	private final List<MethodNode> methodNodes;
@@ -57,8 +61,17 @@ class RunMethod {
 		int labelStateIndex(Label l);
 	}
 
-	static int labelStateIdx(SegmentedCode.LabelEntry le) {
-		return (le.segmentIdx << ST_SHIFT_SEGMENT) | (le.idx << ST_SHIFT_LABELIDX);
+	int labelStateIdx(SegmentedCode.LabelEntry le) {
+		return (le.segmentIdx << stShiftSegment) | (le.idx << stShiftLabelIdx);
+	}
+
+	int resumptionStateIdx(int segmentIdx, int resumptionIdx) {
+		return (segmentIdx << stShiftSegment) | resumptionIdx;
+	}
+
+	// the number of bits needed for the values from 0 to max
+	private static int bitsFor(int max) {
+		return Integer.SIZE - Integer.numberOfLeadingZeros(max);
 	}
 
 	public RunMethod(ASMBytecodeEmitter context) {
@@ -72,6 +85,28 @@ class RunMethod {
 
 		this.closureFields = new ArrayList<>();
 		this.constants = new CachedConstants(context.thisClassType());
+
+		{
+			// each node creates at most one resumption point, numbered from 1
+			int maxNodes = 0;
+			int maxBlocks = 0;
+			for (List<BasicBlock> segment : segmentedCode.segments()) {
+				int nodes = 0;
+				for (BasicBlock blk : segment) {
+					nodes += blk.body().size() + 1;
+				}
+				maxNodes = Math.max(maxNodes, nodes);
+				maxBlocks = Math.max(maxBlocks, segment.size());
+			}
+			int numOfSegments = segmentedCode.segments().size();
+
+			this.stShiftLabelIdx = bitsFor(maxNodes);
+			this.stShiftSegment = stShiftLabelIdx + bitsFor(maxBlocks - 1);
+			if (stShiftSegment + bitsFor(numOfSegments - 1) >= Integer.SIZE) {
+				throw new IllegalStateException("Function too large: " + numOfSegments
+						+ " segments of up to " + maxBlocks + " blocks and " + maxNodes + " nodes");
+			}
+		}
 
 		if (segmentedCode.isSingleton()) {
 			// as before
@@ -564,33 +599,33 @@ class RunMethod {
 		il.add(l_top);
 		il.add(new FrameNode(F_SAME, 0, null, 0, null));
 
-		// rpp = rp & ((1 << ST_SHIFT_SEGMENT) - 1)
+		// rpp = rp & ((1 << stShiftSegment) - 1)
 		il.add(new VarInsnNode(ILOAD, LV_RESUME));
-		il.add(ASMUtils.loadInt((1 << ST_SHIFT_SEGMENT) - 1));
+		il.add(ASMUtils.loadInt((1 << stShiftSegment) - 1));
 		il.add(new InsnNode(IAND));
 		il.add(new VarInsnNode(ISTORE, lv_rpp));
 		il.add(l_rpp);
 		il.add(new FrameNode(F_APPEND, 1, new Object[] { Opcodes.INTEGER }, 0, null));
 
-		// methodIdx = rp >>> ST_SHIFT_SEGMENT
+		// methodIdx = rp >>> stShiftSegment
 		il.add(new VarInsnNode(ILOAD, LV_RESUME));
-		il.add(ASMUtils.loadInt(ST_SHIFT_SEGMENT));
+		il.add(ASMUtils.loadInt(stShiftSegment));
 		il.add(new InsnNode(IUSHR));
 		il.add(new VarInsnNode(ISTORE, lv_methodIdx));
 		il.add(l_methodIdx);
 		il.add(new FrameNode(F_APPEND, 1, new Object[] { Opcodes.INTEGER }, 0, null));
 
-		// jmpIdx = rpp >>> ST_SHIFT_LABELIDX
+		// jmpIdx = rpp >>> stShiftLabelIdx
 		il.add(new VarInsnNode(ILOAD, lv_rpp));
-		il.add(ASMUtils.loadInt(ST_SHIFT_LABELIDX));
+		il.add(ASMUtils.loadInt(stShiftLabelIdx));
 		il.add(new InsnNode(IUSHR));
 		il.add(new VarInsnNode(ISTORE, lv_jmpIdx));
 		il.add(l_jmpIdx);
 		il.add(new FrameNode(F_APPEND, 1, new Object[] { Opcodes.INTEGER }, 0, null));
 
-		// stateIdx = (rp & ((1 << ST_SHIFT_LABELIDX) - 1)) - jmpIdx
+		// stateIdx = (rp & ((1 << stShiftLabelIdx) - 1)) - jmpIdx
 		il.add(new VarInsnNode(ILOAD, LV_RESUME));
-		il.add(ASMUtils.loadInt((1 << ST_SHIFT_LABELIDX) - 1));
+		il.add(ASMUtils.loadInt((1 << stShiftLabelIdx) - 1));
 		il.add(new InsnNode(IAND));
 		il.add(new VarInsnNode(ILOAD, lv_jmpIdx));
 		il.add(new InsnNode(ISUB));

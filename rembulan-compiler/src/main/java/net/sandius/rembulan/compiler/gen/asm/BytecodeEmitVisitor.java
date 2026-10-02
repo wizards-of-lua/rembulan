@@ -224,7 +224,7 @@ class BytecodeEmitVisitor extends CodeVisitor {
 		public InsnList save() {
 			int st = !isSub()
 					? index + 1
-					: segmentIdx << RunMethod.ST_SHIFT_SEGMENT | (index + 1);
+					: runMethod.resumptionStateIdx(segmentIdx, index + 1);
 			return saveState(st);
 		}
 
