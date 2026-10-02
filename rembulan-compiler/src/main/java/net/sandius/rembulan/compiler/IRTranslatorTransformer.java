@@ -692,9 +692,11 @@ class IRTranslatorTransformer extends Transformer {
 
 		vals.clear();  // FIXME: needed?
 
+		// take all values before the first store: a store may call a function (a __newindex
+		// metamethod, or a call in the target expression), which overwrites the multiple values
+		List<Val> srcs = new ArrayList<>();
 		int i = 0;
-		for (LValueExpr lv : node.vars()) {
-
+		for (int j = 0; j < node.vars().size(); j++) {
 			final Val src;
 			if (it.hasNext()) {
 				src = it.next();
@@ -708,8 +710,12 @@ class IRTranslatorTransformer extends Transformer {
 					insns.add(new LoadConst.Nil(src));
 				}
 			}
+			srcs.add(src);
+		}
 
-			vals.push(src);
+		Iterator<Val> sit = srcs.iterator();
+		for (LValueExpr lv : node.vars()) {
+			vals.push(sit.next());
 			assigning = true;
 			lv.accept(this);
 			assigning = false;
