@@ -189,7 +189,8 @@ object StringLibFragments extends FragmentBundle with FragmentExpectations with 
       program ("""return string.format("%+f%+f", 1/0, -1/0)""") succeedsWith ("+inf-inf")
 
       program ("""return string.format("%-+#13.f", 0/0)""") succeedsWith ("nan          ")
-      program ("""return string.format("%0.3f", 1.2345)""") succeedsWith ("1.235")
+      // 1.2345 is 1.23449999... as a double, which C rounds down
+      program ("""return string.format("%0.3f", 1.2345)""") succeedsWith ("1.234")
       program ("""return string.format('%06.2f', 1/2)""") succeedsWith ("000.50")
       program ("""return string.format('%0+6.2f', 1/2)""") succeedsWith ("+00.50")
 

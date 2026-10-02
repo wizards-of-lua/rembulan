@@ -63,9 +63,13 @@ import net.sandius.rembulan.runtime.ResolvedControlThrowable;
 import net.sandius.rembulan.runtime.UnresolvedControlThrowable;
 import net.sandius.rembulan.util.ByteIterator;
 
+import java.math.BigDecimal;
+import java.math.MathContext;
+import java.math.RoundingMode;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Locale;
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -1085,7 +1089,7 @@ public final class StringLib {
 
 				bld.append(justified(width, flags, chars.toString()));
 			}
-			else {
+			else if (spec == 'a' || spec == 'A') {
 				StringBuilder fmtBld = new StringBuilder();
 				fmtBld.append('%');
 				if (hasFlag(flags, FLAG_LEFTJUSTIFY)) fmtBld.append('-');
@@ -1100,18 +1104,110 @@ public final class StringLib {
 
 				if (precision > 0) fmtBld.append('.').append(precision);
 				fmtBld.append(spec);
-				String formatted = String.format(fmtBld.toString(), v);
+				String formatted = String.format(Locale.ROOT, fmtBld.toString(), v);
 
-				if (spec == 'a' || spec == 'A') {
-					// insert the '+' sign to the exponent
-					int p = formatted.indexOf(spec == 'a' ? 'p' : 'P') + 1;
-					if (formatted.charAt(p) != '-') {
-						formatted = formatted.substring(0, p) + '+' + formatted.substring(p);
-					}
+				// insert the '+' sign to the exponent
+				int p = formatted.indexOf(spec == 'a' ? 'p' : 'P') + 1;
+				if (formatted.charAt(p) != '-') {
+					formatted = formatted.substring(0, p) + '+' + formatted.substring(p);
 				}
 
 				bld.append(formatted);
 			}
+			else {
+				// Not with java.util.Formatter: it uses the default locale's decimal separator, rounds
+				// the shortest decimal representation half up rather than the exact value, and its %g
+				// keeps trailing zeros. Lua uses C's printf.
+				boolean negative = v < 0 || (v == 0 && 1 / v < 0);
+				String digits = formatDecimal(Math.abs(v), Character.toLowerCase(spec), precision,
+						hasFlag(flags, FLAG_ALT_FORM));
+				if (Character.isUpperCase(spec)) {
+					digits = digits.toUpperCase(Locale.ROOT);
+				}
+				String sign = negative ? "-"
+						: hasFlag(flags, FLAG_SIGN_ALWAYS) ? "+"
+						: hasFlag(flags, FLAG_SIGN_SPACE) ? " "
+						: "";
+				if (hasFlag(flags, FLAG_ZERO_PAD) && !hasFlag(flags, FLAG_LEFTJUSTIFY)) {
+					bld.append(sign).append(padLeft(digits, '0', width - sign.length()));
+				}
+				else {
+					bld.append(justified(width, flags, sign + digits));
+				}
+			}
+		}
+
+		/**
+		 * Formats a finite, non-negative number as C's printf does with {@code %f}, {@code %e} or
+		 * {@code %g}: rounding its exact binary value, ties to even.
+		 */
+		private static String formatDecimal(double v, char spec, int precision, boolean altForm) {
+			BigDecimal exact = new BigDecimal(v);
+			switch (spec) {
+				case 'f':
+					return fixed(exact, precision < 0 ? 6 : precision, altForm);
+				case 'e':
+					return scientific(exact, precision < 0 ? 6 : precision, altForm);
+				default: {
+					// %g: %e or %f, whichever suits the exponent, with precision significant digits
+					int p = precision < 0 ? 6 : Math.max(precision, 1);
+					int x = exponent(exact, p);
+					String s = p > x && x >= -4
+							? fixed(exact, p - 1 - x, altForm)
+							: scientific(exact, p - 1, altForm);
+					return altForm ? s : withoutTrailingZeros(s);
+				}
+			}
+		}
+
+		private static String fixed(BigDecimal v, int precision, boolean altForm) {
+			String s = v.setScale(precision, RoundingMode.HALF_EVEN).toPlainString();
+			return altForm && precision == 0 ? s + "." : s;
+		}
+
+		private static String scientific(BigDecimal v, int precision, boolean altForm) {
+			int x = exponent(v, precision + 1);
+			String digits = v.signum() == 0
+					? "0"
+					: v.round(new MathContext(precision + 1, RoundingMode.HALF_EVEN)).unscaledValue().toString();
+			// the rounded digits, without trailing zeros BigDecimal may have dropped
+			StringBuilder bld = new StringBuilder(padRight(digits, '0', precision + 1).substring(0, precision + 1));
+			if (precision > 0 || altForm) {
+				bld.insert(1, '.');
+			}
+			bld.append(x < 0 ? "e-" : "e+");
+			String exp = Integer.toString(Math.abs(x));
+			if (exp.length() < 2) {
+				bld.append('0');
+			}
+			return bld.append(exp).toString();
+		}
+
+		/** The decimal exponent of the number after rounding it to the given significant digits. */
+		private static int exponent(BigDecimal v, int significantDigits) {
+			if (v.signum() == 0) {
+				return 0;
+			}
+			BigDecimal rounded = v.round(new MathContext(significantDigits, RoundingMode.HALF_EVEN));
+			return rounded.precision() - rounded.scale() - 1;
+		}
+
+		/** Removes trailing zeros of the fraction, and the decimal point if nothing is left of it. */
+		private static String withoutTrailingZeros(String s) {
+			int e = s.indexOf('e');
+			String mantissa = e < 0 ? s : s.substring(0, e);
+			String rest = e < 0 ? "" : s.substring(e);
+			if (mantissa.indexOf('.') >= 0) {
+				int end = mantissa.length();
+				while (mantissa.charAt(end - 1) == '0') {
+					end--;
+				}
+				if (mantissa.charAt(end - 1) == '.') {
+					end--;
+				}
+				mantissa = mantissa.substring(0, end);
+			}
+			return mantissa + rest;
 		}
 
 		private void format_s(ExecutionContext context, String fmt, StringBuilder bld, ArgumentIterator args, int index, int width, int flags, int precision)
