@@ -1002,7 +1002,8 @@ public class StringPattern {
       } else {
         // not escaped
         char c = next();
-        if (peek() == '-') {
+        // As in Lua, a '-' right before the closing ']' is a literal, not the start of a range.
+        if (index + 1 < pattern.length() && peek() == '-' && pattern.charAt(index + 1) != ']') {
           // it's a range
           consume("-");
           char d = next();
@@ -1016,6 +1017,10 @@ public class StringPattern {
 
     private CharacterSet characterSetBody() {
       List<CharacterSet.SetElement> elems = new ArrayList<>();
+      // As in Lua, the first character of a set belongs to it, even a ']'.
+      if (!isEos()) {
+        elems.add(characterSetElement());
+      }
       while (!isEos() && peek() != ']') {
         elems.add(characterSetElement());
       }
