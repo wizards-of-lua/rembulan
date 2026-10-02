@@ -1604,13 +1604,11 @@ public final class BasicLib {
 			// chunk name
 			final String chunkName;
 			if (args.hasNext() && args.peek() != null) {
-				chunkName = "[string \"" + args.nextString() + "\"]";
+				chunkName = chunkId(args.nextString().toString());
 			}
 			else {
 				if (args.hasNext()) args.skip();  // next is nil
-				chunkName = chunk instanceof ByteString
-						? "[string \"" + chunk + "\"]"
-						: "=(load)";
+				chunkName = chunkId(chunk instanceof ByteString ? chunk.toString() : "=(load)");
 			}
 
 			final ByteString modeString = args.nextOptionalString(DEFAULT_MODE);
@@ -1633,6 +1631,38 @@ public final class BasicLib {
 				}
 			}
 
+		}
+
+		/** The longest chunk id, as {@code LUA_IDSIZE} without the terminating zero. */
+		private static final int ID_SIZE = 59;
+
+		/**
+		 * The name a chunk is shown with in messages, as Lua's {@code luaO_chunkid} makes it:
+		 * {@code "=name"} gives {@code name}, {@code "@file"} gives {@code file}, any other source
+		 * {@code [string "first line..."]}, shortened. The source itself is the default name of a
+		 * chunk loaded from a string, and the compiler embeds the name in the class it generates,
+		 * where strings are limited to 64 KB.
+		 */
+		static String chunkId(String source) {
+			if (source.startsWith("=")) {
+				return source.substring(1, Math.min(source.length(), ID_SIZE + 1));
+			}
+			if (source.startsWith("@")) {
+				String file = source.substring(1);
+				return file.length() <= ID_SIZE
+						? file
+						: "..." + file.substring(file.length() - (ID_SIZE - 3));
+			}
+			final String prefix = "[string \"";
+			final String ellipsis = "...";
+			final String suffix = "\"]";
+			int room = ID_SIZE - prefix.length() - ellipsis.length() - suffix.length();
+			int newline = source.indexOf('\n');
+			if (source.length() < room && newline < 0) {
+				return prefix + source + suffix;
+			}
+			int length = newline < 0 ? source.length() : newline;
+			return prefix + source.substring(0, Math.min(length, room)) + ellipsis + suffix;
 		}
 
 		private void loadFromString(ExecutionContext context, String chunkName, Object env, ByteString chunkText) {
