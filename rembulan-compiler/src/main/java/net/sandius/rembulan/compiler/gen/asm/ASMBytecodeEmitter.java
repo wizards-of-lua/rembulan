@@ -287,9 +287,7 @@ public class ASMBytecodeEmitter extends BytecodeEmitter {
 
 		RunMethod runMethod = new RunMethod(this);
 
-		for (RunMethod.ConstFieldInstance cfi : runMethod.constFields()) {
-			classNode.fields.add(cfi.fieldNode());
-		}
+		classNode.fields.addAll(runMethod.constants().fieldNodes());
 
 		ConstructorMethod ctor = new ConstructorMethod(this, runMethod);
 

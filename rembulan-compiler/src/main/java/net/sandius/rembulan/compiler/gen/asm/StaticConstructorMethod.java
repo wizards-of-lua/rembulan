@@ -46,7 +46,7 @@ class StaticConstructorMethod {
 	}
 
 	public boolean isEmpty() {
-		return context.hasUpvalues() && runMethod.constFields().isEmpty();
+		return context.hasUpvalues() && runMethod.constants().isEmpty();
 	}
 
 	public MethodNode methodNode() {
@@ -78,11 +78,7 @@ class StaticConstructorMethod {
 					context.thisClassType().getDescriptor()));
 		}
 
-		if (!runMethod.constFields().isEmpty()) {
-			for (RunMethod.ConstFieldInstance cfi : runMethod.constFields()) {
-				il.add(cfi.instantiateInsns());
-			}
-		}
+		il.add(runMethod.constants().instantiateInsns());
 
 		il.add(new InsnNode(RETURN));
 		il.add(end);

@@ -19,6 +19,7 @@ package net.sandius.rembulan.compiler.gen.asm.helpers;
 import org.objectweb.asm.Type;
 import org.objectweb.asm.tree.AbstractInsnNode;
 import org.objectweb.asm.tree.FrameNode;
+import org.objectweb.asm.tree.InsnList;
 import org.objectweb.asm.tree.InsnNode;
 import org.objectweb.asm.tree.IntInsnNode;
 import org.objectweb.asm.tree.LdcInsnNode;
@@ -96,6 +97,51 @@ public abstract class ASMUtils {
 		if (l == 0L) return new InsnNode(LCONST_0);
 		else if (l == 1L) return new InsnNode(LCONST_1);
 		else return new LdcInsnNode(l);
+	}
+
+	/**
+	 * Loads a non-negative {@code int} without a constant pool entry, unlike {@link #loadInt(int)},
+	 * so that code with many distinct values, such as the positions in a large table constructor,
+	 * does not overflow the constant pool.
+	 *
+	 * @param i  the value, must be in the range from 0 to 2<sup>30</sup>-1
+	 * @return  the instructions loading {@code i}
+	 */
+	public static InsnList loadIntWithoutConstant(int i) {
+		if (i < 0 || i >= (1 << 30)) {
+			throw new IllegalArgumentException("Value out of range: " + i);
+		}
+		InsnList il = new InsnList();
+		if (i <= Short.MAX_VALUE) {
+			il.add(loadInt(i));
+		}
+		else {
+			il.add(loadInt(i >>> 15));
+			il.add(loadInt(15));
+			il.add(new InsnNode(ISHL));
+			il.add(loadInt(i & Short.MAX_VALUE));
+			il.add(new InsnNode(IOR));
+		}
+		return il;
+	}
+
+	/**
+	 * Loads a {@code long} like {@link #loadLong(long)}, but without a constant pool entry for the
+	 * values from 0 to 2<sup>30</sup>-1.
+	 *
+	 * @param l  the value
+	 * @return  the instructions loading {@code l}
+	 */
+	public static InsnList loadLongWithoutConstant(long l) {
+		InsnList il = new InsnList();
+		if (l > 1L && l < (1 << 30)) {
+			il.add(loadIntWithoutConstant((int) l));
+			il.add(new InsnNode(I2L));
+		}
+		else {
+			il.add(loadLong(l));
+		}
+		return il;
 	}
 
 	public static AbstractInsnNode loadDouble(double d) {

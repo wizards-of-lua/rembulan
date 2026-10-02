@@ -69,7 +69,7 @@ class BytecodeEmitVisitor extends CodeVisitor {
 
 	private final List<RunMethod.ClosureFieldInstance> instanceLevelClosures;
 
-	private final List<RunMethod.ConstFieldInstance> constFields;
+	private final CachedConstants constants;
 
 	public BytecodeEmitVisitor(
 			ASMBytecodeEmitter context,
@@ -77,7 +77,7 @@ class BytecodeEmitVisitor extends CodeVisitor {
 			SlotAllocInfo slots,
 			TypeInfo types,
 			List<RunMethod.ClosureFieldInstance> instanceLevelClosures,
-			List<RunMethod.ConstFieldInstance> constFields,
+			CachedConstants constants,
 			int segmentIdx,
 			RunMethod.LabelResolver resolver) {
 
@@ -96,7 +96,7 @@ class BytecodeEmitVisitor extends CodeVisitor {
 		this.locals = new ArrayList<>();
 
 		this.instanceLevelClosures = Objects.requireNonNull(instanceLevelClosures);
-		this.constFields = Objects.requireNonNull(constFields);
+		this.constants = Objects.requireNonNull(constants);
 	}
 
 	private boolean isSub() {
@@ -113,10 +113,6 @@ class BytecodeEmitVisitor extends CodeVisitor {
 
 	public List<RunMethod.ClosureFieldInstance> instanceLevelClosures() {
 		return instanceLevelClosures;
-	}
-
-	public List<RunMethod.ConstFieldInstance> constFields() {
-		return constFields;
 	}
 
 	protected int slot(AbstractVal v) {
@@ -144,37 +140,7 @@ class BytecodeEmitVisitor extends CodeVisitor {
 		}
 	}
 
-	private RunMethod.ConstFieldInstance newConstFieldInstance(final Object constValue, int idx) {
-		Objects.requireNonNull(constValue);
-
-		String fieldName = "_k_" + idx;
-
-		final Type t;
-		if (constValue instanceof Double || constValue instanceof Long) {
-			t = Type.getType(constValue.getClass());
-			return new RunMethod.ConstFieldInstance(constValue, fieldName, context.thisClassType(), t) {
-				@Override
-				public void doInstantiate(InsnList il) {
-					il.add(BoxedPrimitivesMethods.loadBoxedConstant(constValue));
-				}
-			};
-		}
-		else if (constValue instanceof ByteString) {
-			t = Type.getType(constValue.getClass());
-			return new RunMethod.ConstFieldInstance(constValue, fieldName, context.thisClassType(), Type.getType(ByteString.class)) {
-				@Override
-				public void doInstantiate(InsnList il) {
-					il.add(newByteString((ByteString) constValue));
-				}
-			};
-		}
-		else {
-			throw new UnsupportedOperationException("Illegal constant: " + constValue);
-		}
-
-	}
-
-	private static InsnList newByteString(ByteString value) {
+	static InsnList newByteString(ByteString value) {
 		InsnList il = new InsnList();
 		il.add(new LdcInsnNode(value.toRawString()));
 		il.add(new MethodInsnNode(INVOKESTATIC,
@@ -188,15 +154,7 @@ class BytecodeEmitVisitor extends CodeVisitor {
 	}
 
 	private InsnList loadCachedConst(Object constValue) {
-		for (RunMethod.ConstFieldInstance cfi : constFields) {
-			if (cfi.value().equals(constValue)) {
-				return cfi.accessInsns();
-			}
-		}
-
-		RunMethod.ConstFieldInstance cfi = newConstFieldInstance(constValue, constFields.size());
-		constFields.add(cfi);
-		return cfi.accessInsns();
+		return constants.accessInsns(constValue);
 	}
 
 	public AbstractInsnNode loadExecutionContext() {
@@ -584,7 +542,7 @@ class BytecodeEmitVisitor extends CodeVisitor {
 	public void visit(TabRawSetInt node) {
 		il.add(new VarInsnNode(ALOAD, slot(node.obj())));
 		il.add(new TypeInsnNode(CHECKCAST, Type.getInternalName(Table.class)));
-		il.add(ASMUtils.loadLong(node.idx()));
+		il.add(ASMUtils.loadLongWithoutConstant(node.idx()));
 		il.add(new VarInsnNode(ALOAD, slot(node.value())));
 		il.add(TableMethods.rawset_int());
 	}

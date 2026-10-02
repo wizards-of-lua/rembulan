@@ -50,7 +50,7 @@ class RunMethod {
 	private final boolean resumable;
 
 	private final List<ClosureFieldInstance> closureFields;
-	private final List<ConstFieldInstance> constFields;
+	private final CachedConstants constants;
 
 	interface LabelResolver {
 		boolean isLocalLabel(Label l);
@@ -71,12 +71,12 @@ class RunMethod {
 		this.methodNodes = new ArrayList<>();
 
 		this.closureFields = new ArrayList<>();
-		this.constFields = new ArrayList<>();
+		this.constants = new CachedConstants(context.thisClassType());
 
 		if (segmentedCode.isSingleton()) {
 			// as before
 			BytecodeEmitVisitor visitor = new BytecodeEmitVisitor(
-					context, this, context.slots, context.types, closureFields, constFields, -1,
+					context, this, context.slots, context.types, closureFields, constants, -1,
 					new LabelResolver() {
 						@Override
 						public boolean isLocalLabel(Label l) {
@@ -101,7 +101,7 @@ class RunMethod {
 				final int thisSegmentIdx = i;
 
 				BytecodeEmitVisitor visitor = new BytecodeEmitVisitor(
-						context, this, context.slots, context.types, closureFields, constFields, i,
+						context, this, context.slots, context.types, closureFields, constants, i,
 						new LabelResolver() {
 							@Override
 							public boolean isLocalLabel(Label l) {
@@ -415,8 +415,8 @@ class RunMethod {
 
 	}
 
-	public List<ConstFieldInstance> constFields() {
-		return constFields;
+	public CachedConstants constants() {
+		return constants;
 	}
 
 	private List<LocalVariableNode> baseLocals(LabelNode l_begin, LabelNode l_end) {
