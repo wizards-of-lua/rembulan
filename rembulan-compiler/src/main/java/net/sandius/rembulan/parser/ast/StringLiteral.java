@@ -21,6 +21,7 @@ import net.sandius.rembulan.ByteStringBuilder;
 import net.sandius.rembulan.LuaFormat;
 
 import java.io.BufferedInputStream;
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.ByteBuffer;
@@ -74,7 +75,8 @@ public class StringLiteral extends Literal {
 
 	private static ByteString stringValueOf(InputStream in) throws IOException {
 		Objects.requireNonNull(in);
-		BufferedInputStream stream = new BufferedInputStream(in);
+		// a BufferedInputStream allocates 8 KB, which adds up for large chunks with many literals
+		InputStream stream = in.markSupported() ? in : new BufferedInputStream(in);
 
 		// encoder for UTF-8 byte sequences
 		CharsetEncoder utf8Encoder = StandardCharsets.UTF_8.newEncoder()
@@ -246,7 +248,7 @@ public class StringLiteral extends Literal {
 
 	private static ByteString stringValueOf(ByteString s) {
 		try {
-			return stringValueOf(s.asInputStream());
+			return stringValueOf(new ByteArrayInputStream(s.getBytes()));
 		}
 		catch (IOException ex) {
 			// should not happen!

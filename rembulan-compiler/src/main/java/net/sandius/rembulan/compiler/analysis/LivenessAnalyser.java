@@ -24,6 +24,7 @@ import java.util.ArrayDeque;
 import java.util.Deque;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.IdentityHashMap;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.Objects;
@@ -33,17 +34,11 @@ public class LivenessAnalyser {
 
 	private final IRFunc fn;
 
-	private final Map<IRNode, Set<Var>> varLiveIn;
-	private final Map<IRNode, Set<AbstractVal>> valLiveIn;
-
 	private Map<Label, Set<Var>> endVarLiveIn;
 	private Map<Label, Set<AbstractVal>> endValLiveIn;
 
 	private LivenessAnalyser(IRFunc fn) {
 		this.fn = Objects.requireNonNull(fn);
-
-		this.varLiveIn = new HashMap<>();
-		this.valLiveIn = new HashMap<>();
 
 		this.endVarLiveIn = new HashMap<>();
 		this.endValLiveIn = new HashMap<>();
@@ -60,18 +55,9 @@ public class LivenessAnalyser {
 		Map<Label, Set<Label>> in = CodeUtils.inLabels(code);
 
 		// initialise
-		{
-			for (Label l : code.labels()) {
-				endVarLiveIn.put(l, new HashSet<Var>());
-				endValLiveIn.put(l, new HashSet<AbstractVal>());
-			}
-
-			Iterator<IRNode> ns = CodeUtils.nodeIterator(code);
-			while (ns.hasNext()) {
-				IRNode n = ns.next();
-				varLiveIn.put(n, new HashSet<Var>());
-				valLiveIn.put(n, new HashSet<AbstractVal>());
-			}
+		for (Label l : code.labels()) {
+			endVarLiveIn.put(l, new HashSet<Var>());
+			endValLiveIn.put(l, new HashSet<AbstractVal>());
 		}
 
 		Deque<Label> open = new ArrayDeque<>();
@@ -81,6 +67,8 @@ public class LivenessAnalyser {
 			open.push(l);
 		}
 
+		// iterate until the values live at the end of each block are stable;
+		// the values live at each node are computed only once, from the final result
 		while (!open.isEmpty()) {
 			Label l = open.pop();
 
@@ -109,88 +97,47 @@ public class LivenessAnalyser {
 		return result();
 	}
 
-	private static void mergeLiveOut(Map<IRNode, LivenessInfo.Entry> entries, IRNode m, IRNode n) {
-		LivenessInfo.Entry e_m = entries.get(m);
-		LivenessInfo.Entry e_n = entries.get(n);
-		e_m.outVar().addAll(e_n.inVar());
-		e_m.outVal().addAll(e_n.inVal());
-	}
-
+	// Large chunks have hundreds of thousands of nodes, so the sets are kept small: they are
+	// immutable, the live-out set of a node is the live-in set of the node following it, and a node
+	// that changes nothing shares its successor's set.
 	private LivenessInfo result() {
-		Map<IRNode, LivenessInfo.Entry> entries = new HashMap<>();
+		// identity: some nodes are equal to each other (e.g. CPUWithdraw of the same cost)
+		Map<IRNode, LivenessInfo.Entry> entries = new IdentityHashMap<>();
 
-		// initialise
-		Iterator<IRNode> nodeIterator = CodeUtils.nodeIterator(fn.code());
-		while (nodeIterator.hasNext()) {
-			IRNode node = nodeIterator.next();
-
-			Set<Var> var_in = varLiveIn.get(node);
-			Set<AbstractVal> val_in = valLiveIn.get(node);
-
-			entries.put(node, new LivenessInfo.Entry(var_in, new HashSet<Var>(), val_in, new HashSet<AbstractVal>()));
-		}
-
-		// compute live-out from live-in
 		Iterator<BasicBlock> blockIterator = fn.code().blockIterator();
 		while (blockIterator.hasNext()) {
 			BasicBlock b = blockIterator.next();
 
-			// body
-			for (int i = 0; i < b.body().size(); i++) {
-				BodyNode m = b.body().get(i);
-				IRNode n = i + 1 < b.body().size() ? b.body().get(i + 1) : b.end();
-				mergeLiveOut(entries, m, n);
+			Set<Var> varOut = CompactSets.copyOf(endVarLiveIn.get(b.label()));
+			Set<AbstractVal> valOut = CompactSets.copyOf(endValLiveIn.get(b.label()));
+
+			LivenessVisitor visitor = new LivenessVisitor(varOut, valOut);
+
+			// iterating backwards
+			for (int i = b.body().size(); i >= 0; i--) {
+				IRNode node = i < b.body().size() ? b.body().get(i) : b.end();
+				node.accept(visitor);
+
+				Set<Var> varIn = CompactSets.copyOf(visitor.currentVarLiveIn(), varOut);
+				Set<AbstractVal> valIn = CompactSets.copyOf(visitor.currentValLiveIn(), valOut);
+
+				entries.put(node, new LivenessInfo.Entry(varIn, varOut, valIn, valOut));
+
+				varOut = varIn;
+				valOut = valIn;
 			}
-
-			// end
-			BlockTermNode end = b.end();
-			LivenessInfo.Entry e_end = entries.get(end);
-
-			for (Label nxt : end.nextLabels()) {
-				BasicBlock nextBlock = fn.code().block(nxt);
-				IRNode n = !nextBlock.body().isEmpty() ? nextBlock.body().get(0) : nextBlock.end();
-				mergeLiveOut(entries, end, n);
-			}
-
 		}
 
 		return new LivenessInfo(entries);
 	}
 
-	private boolean processBlock(LivenessVisitor visitor, BasicBlock block) {
+	private static void processBlock(LivenessVisitor visitor, BasicBlock block) {
 		// iterating backwards
-		boolean changed = processNode(visitor, block.end());
+		block.end().accept(visitor);
 
 		for (int i = block.body().size() - 1; i >= 0; i--) {
-			changed |= processNode(visitor, block.body().get(i));
+			block.body().get(i).accept(visitor);
 		}
-
-		return changed;
-
-	}
-
-	private boolean processNode(LivenessVisitor visitor, IRNode node) {
-		Objects.requireNonNull(node);
-
-		final Set<Var> varLive_in = varLiveIn.get(node);
-		final Set<AbstractVal> valLive_in = valLiveIn.get(node);
-
-		node.accept(visitor);
-
-		boolean varSame = visitor.currentVarLiveIn().equals(varLive_in);
-		boolean valSame = visitor.currentValLiveIn().equals(valLive_in);
-
-		if (!varSame) {
-			varLive_in.clear();
-			varLive_in.addAll(visitor.currentVarLiveIn());
-		}
-
-		if (!valSame) {
-			valLive_in.clear();
-			valLive_in.addAll(visitor.currentValLiveIn());
-		}
-
-		return !varSame || !valSame;
 	}
 
 	private class LivenessVisitor extends AbstractUseDefVisitor {

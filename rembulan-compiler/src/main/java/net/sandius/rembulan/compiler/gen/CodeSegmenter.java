@@ -27,28 +27,11 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
-import java.util.Objects;
 
 public final class CodeSegmenter {
 
 	private CodeSegmenter() {
 		// not to be instantiated
-	}
-
-	private static int blockLength(BasicBlock blk) {
-		return blk.body().size() + 1;
-	}
-
-	private static class BlockSplit {
-
-		final BasicBlock pred;
-		final BasicBlock succ;
-
-		private BlockSplit(BasicBlock pred, BasicBlock succ) {
-			this.pred = Objects.requireNonNull(pred);
-			this.succ = Objects.requireNonNull(succ);
-		}
-
 	}
 
 	private static int lastLine(List<BodyNode> nodes) {
@@ -59,27 +42,6 @@ public final class CodeSegmenter {
 			}
 		}
 		return line;
-	}
-
-	private static BlockSplit splitBlockAt(BasicBlock blk, int index, int splitIdx) {
-		List<BodyNode> predBody = blk.body().subList(0, index);
-		List<BodyNode> succBody = new ArrayList<>();
-
-		// carry line info over to succ
-		int firstSuccLine = lastLine(predBody);
-		if (firstSuccLine != -1) {
-			succBody.add(new Line(firstSuccLine));
-		}
-
-		// append nodes to succ
-		succBody.addAll(blk.body().subList(index, blk.body().size()));
-
-		Label succLabel = new Label(-(splitIdx + 1));
-
-		BasicBlock pred = new BasicBlock(blk.label(), predBody, new ToNext(succLabel));
-		BasicBlock succ = new BasicBlock(succLabel, Collections.unmodifiableList(succBody), blk.end());
-
-		return new BlockSplit(pred, succ);
 	}
 
 	public static SegmentedCode segment(Code code, int limit) {
@@ -94,44 +56,58 @@ public final class CodeSegmenter {
 			int splitIdx = 0;
 
 			Iterator<BasicBlock> bit = code.blockIterator();
-			BasicBlock blk = bit.hasNext() ? bit.next() : null;
+			while (bit.hasNext()) {
+				BasicBlock blk = bit.next();
+				List<BodyNode> body = blk.body();
 
-			while (blk != null) {
-				int len = blockLength(blk);
+				// the part of blk not yet placed: carried line info, then body from pos on;
+				// tracked by position, since copying the rest on each split is quadratic
+				// in the size of a large block
+				Label label = blk.label();
+				Line carried = null;
+				int pos = 0;
 
-				if (count + len < limit) {
-					// block fits in with a margin, append and fetch next one
-					currentSegment.add(blk);
-					count += len;
+				while (true) {
+					int head = carried != null ? 1 : 0;
+					int len = head + body.size() - pos + 1;
 
-					blk = bit.hasNext() ? bit.next() : null;
-				}
-				else if (count + len == limit) {
-					// fits entirely in, but it's the last one
-					currentSegment.add(blk);
-					segmentBlocks.add(Collections.unmodifiableList(currentSegment));
+					if (count + len <= limit) {
+						BasicBlock rest = pos == 0 && carried == null
+								? blk
+								: new BasicBlock(label, bodyOf(carried, body, pos, body.size()), blk.end());
+						currentSegment.add(rest);
+						count += len;
 
-					// start new segment
-					currentSegment = new ArrayList<>();
-					count = 0;
+						if (count == limit) {
+							// fits entirely in, but it's the last one
+							segmentBlocks.add(Collections.unmodifiableList(currentSegment));
 
-					blk = bit.hasNext() ? bit.next() : null;
-				}
-				else {
-					assert (count + len > limit);
+							// start new segment
+							currentSegment = new ArrayList<>();
+							count = 0;
+						}
+						break;
+					}
+					else {
+						// split the rest of blk, and try again with the remainder
+						int end = pos + (limit - count) - head;
+						List<BodyNode> predBody = bodyOf(carried, body, pos, end);
+						Label succLabel = new Label(-(splitIdx++ + 1));
 
-					// split blk and try again
-					BlockSplit split = splitBlockAt(blk, limit - count, splitIdx++);
+						// current segment is done
+						currentSegment.add(new BasicBlock(label, predBody, new ToNext(succLabel)));
+						segmentBlocks.add(Collections.unmodifiableList(currentSegment));
 
-					// current segment is done
-					currentSegment.add(split.pred);
-					segmentBlocks.add(Collections.unmodifiableList(currentSegment));
+						// start new segment
+						currentSegment = new ArrayList<>();
+						count = 0;
 
-					// start new segment
-					currentSegment = new ArrayList<>();
-					count = 0;
-
-					blk = split.succ;
+						// carry line info over to the remainder
+						int line = lastLine(predBody);
+						carried = line != -1 ? new Line(line) : null;
+						label = succLabel;
+						pos = end;
+					}
 				}
 			}
 
@@ -141,6 +117,15 @@ public final class CodeSegmenter {
 
 			return SegmentedCode.of(segmentBlocks);
 		}
+	}
+
+	private static List<BodyNode> bodyOf(Line carried, List<BodyNode> body, int from, int to) {
+		List<BodyNode> result = new ArrayList<>(to - from + 1);
+		if (carried != null) {
+			result.add(carried);
+		}
+		result.addAll(body.subList(from, to));
+		return Collections.unmodifiableList(result);
 	}
 
 }

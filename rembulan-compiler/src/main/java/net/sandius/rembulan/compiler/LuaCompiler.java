@@ -213,10 +213,10 @@ public class LuaCompiler {
 			throws ParseException, TokenMgrError {
 
 		Objects.requireNonNull(sourceText);
-		Chunk ast = parse(sourceText);
-		Module module = translate(ast);
 
-		Iterable<ProcessedFunc> pfs = processModule(module);
+		// no locals for the syntax tree and the unprocessed module, so that the garbage collector
+		// can reclaim them while the rest is compiled (a large chunk takes hundreds of megabytes)
+		Iterable<ProcessedFunc> pfs = processModule(translate(parse(sourceText)));
 
 		Map<String, ByteVector> classMap = new HashMap<>();
 		String mainClass = null;
