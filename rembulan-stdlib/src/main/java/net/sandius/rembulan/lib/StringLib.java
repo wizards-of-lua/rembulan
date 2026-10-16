@@ -1004,7 +1004,7 @@ public final class StringLib {
 			return nonNegative
 					? (hasFlag(flags, FLAG_SIGN_ALWAYS)
 							? "+"
-							: (hasFlag(flags, FLAG_ZERO_PAD)
+							: (hasFlag(flags, FLAG_SIGN_SPACE)
 									? " "
 									: ""))
 					: "-";
@@ -1034,6 +1034,19 @@ public final class StringLib {
 					: digits;
 		}
 
+		/**
+		 * An integer conversion, justified to the width as C's printf does: with the flag {@code 0}
+		 * the digits are padded with zeros after the sign or prefix, unless the flag {@code -} or a
+		 * precision is given; otherwise the whole is padded with spaces.
+		 */
+		private static String justifiedInteger(int width, int flags, int precision, String prefix, String digits) {
+			if (width >= 0 && precision < 0
+					&& hasFlag(flags, FLAG_ZERO_PAD) && !hasFlag(flags, FLAG_LEFTJUSTIFY)) {
+				return prefix + padLeft(digits, '0', width - prefix.length());
+			}
+			return justified(width, flags, prefix + digits);
+		}
+
 		private static final int FLAG_LEFTJUSTIFY = 1 << 1;
 		private static final int FLAG_SIGN_ALWAYS = 1 << 2;
 		private static final int FLAG_SIGN_SPACE = 1 << 3;
@@ -1045,30 +1058,30 @@ public final class StringLib {
 
 			String ls = LuaFormat.toString(l);
 			String digits = l < 0 ? ls.substring(1) : ls;  // ignore the sign, we'll re-attach it later
-			bld.append(justified(width, flags,
-					sign(l >= 0, flags) + padded(precision, digits)));
+			bld.append(justifiedInteger(width, flags, precision,
+					sign(l >= 0, flags), padded(precision, digits)));
 		}
 
 		private static void format_unsigned_integer(StringBuilder bld, ArgumentIterator args, int width, int flags, int precision) {
 			long l = args.nextInteger();
 
 			String digits = longToUnsignedString(l);
-			bld.append(justified(width, flags, padded(precision, digits)));
+			bld.append(justifiedInteger(width, flags, precision, "", padded(precision, digits)));
 		}
 
 		private static void format_octal_integer(StringBuilder bld, ArgumentIterator args, int width, int flags, int precision) {
 			long l = args.nextInteger();
 
 			String digits = Long.toOctalString(l);
-			bld.append(justified(width, flags, altForm(l, flags, "0") + padded(precision, digits)));
+			bld.append(justifiedInteger(width, flags, precision, altForm(l, flags, "0"), padded(precision, digits)));
 		}
 
 		private static void format_hex_integer(StringBuilder bld, ArgumentIterator args, boolean uppercase, int width, int flags, int precision) {
 			long l = args.nextInteger();
 
 			String digits = Long.toHexString(l);
-			String lowerCaseResult = justified(width, flags,
-					altForm(l, flags, "0x") + padded(precision, digits));
+			String lowerCaseResult = justifiedInteger(width, flags, precision,
+					altForm(l, flags, "0x"), padded(precision, digits));
 
 			bld.append(uppercase ? lowerCaseResult.toUpperCase() : lowerCaseResult);
 		}
