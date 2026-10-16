@@ -647,7 +647,8 @@ public class StringPattern {
             max = i;
           }
 
-          for (int j = min; j < max; j++) {
+          // up to max included: the rest may only match after the whole run
+          for (int j = min; j <= max; j++) {
             int nxt = ms.next(j);
             if (nxt != NO_MATCH) {
               return nxt;
