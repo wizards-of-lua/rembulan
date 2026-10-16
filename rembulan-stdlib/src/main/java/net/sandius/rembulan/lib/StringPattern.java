@@ -805,27 +805,29 @@ public class StringPattern {
   static class PI_frontier extends PI {
 
     private final CharacterSet cs;
+    private final boolean complement;
 
-    PI_frontier(CharacterSet cs) {
+    PI_frontier(CharacterSet cs, boolean complement) {
       this.cs = Objects.requireNonNull(cs);
+      this.complement = complement;
     }
 
     @Override
     public String toString() {
-      return "%f[" + cs.toString() + "]";
+      return "%f[" + (complement ? "^" : "") + cs.toString() + "]";
+    }
+
+    private boolean inSet(char c) {
+      return cs.matches(c) != complement;
     }
 
     @Override
     public int match(MatchState ms) {
-      if (ms.strIdx > 0 && ms.strIdx < ms.str.length()) {
-        char c = ms.str.charAt(ms.strIdx - 1);
-        char d = ms.str.charAt(ms.strIdx);
-
-        if (!cs.matches(c) && cs.matches(d)) {
-          return ms.next(ms.strIdx);
-        } else {
-          return NO_MATCH;
-        }
+      // as in Lua, the positions before the first and after the last character hold '\0'
+      char c = ms.strIdx > 0 ? ms.str.charAt(ms.strIdx - 1) : '\0';
+      char d = ms.strIdx < ms.str.length() ? ms.str.charAt(ms.strIdx) : '\0';
+      if (!inSet(c) && inSet(d)) {
+        return ms.next(ms.strIdx);
       } else {
         return NO_MATCH;
       }
@@ -1035,9 +1037,14 @@ public class StringPattern {
 
     private void PI_frontier(List<PI> pis) {
       consume("%f[");
+      boolean complement = false;
+      if (continuesWith("^")) {
+        consume("^");
+        complement = true;
+      }
       CharacterSet cs = characterSetBody();
       consume("]");
-      pis.add(new PI_frontier(cs));
+      pis.add(new PI_frontier(cs, complement));
     }
 
     private void PI_balanced(List<PI> pis) {
