@@ -1266,7 +1266,7 @@ public final class StringLib {
 			if (o == null) s = LuaFormat.NIL.toString();
 			else if (o instanceof Boolean) s = LuaFormat.toString(((Boolean) o).booleanValue());
 			else if (o instanceof String) s = LuaFormat.escape((String) o);
-			else if (o instanceof ByteString) s = LuaFormat.escape(((ByteString) o).toString());
+			else if (o instanceof ByteString) s = LuaFormat.escape((ByteString) o);
 			else if (o instanceof Number) s = Conversions.stringValueOf((Number) o).toString();
 			else {
 				throw new BadArgumentException(args.position(), name(), "value has no literal form");

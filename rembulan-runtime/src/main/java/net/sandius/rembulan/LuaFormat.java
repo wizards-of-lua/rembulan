@@ -356,6 +356,7 @@ public final class LuaFormat {
 			case '\t': return 't';
 			case CHAR_VERTICAL_TAB: return 'v';
 			case '"': return '"';
+			case '\\': return '\\';
 			default: return -1;
 		}
 	}
@@ -399,7 +400,7 @@ public final class LuaFormat {
 				else {
 					if ((int) c <= 0xff) {
 						bld.append('x');
-						bld.append(toHex(((int) c >>> 8) & 0xf));
+						bld.append(toHex(((int) c >>> 4) & 0xf));
 						bld.append(toHex((int) c & 0xf));
 					}
 					else {
