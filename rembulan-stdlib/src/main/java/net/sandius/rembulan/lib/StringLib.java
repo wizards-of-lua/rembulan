@@ -1240,7 +1240,7 @@ public final class StringLib {
 
 			ByteString stringValue = Conversions.stringValueOf(v);
 			if (stringValue != null) {
-				s = stringValue.toString();
+				s = stringValue.toRawString();
 			}
 			else {
 				Object metamethod = Metatables.getMetamethod(context, BasicLib.MT_TOSTRING, v);
@@ -1256,7 +1256,7 @@ public final class StringLib {
 					return;
 				}
 				else {
-					s = Conversions.toHumanReadableString(v).toString();
+					s = Conversions.toHumanReadableString(v).toRawString();
 				}
 			}
 			bld.append(justified(width, flags, trimmed(precision, s)));
@@ -1265,7 +1265,7 @@ public final class StringLib {
 		private static void resume_s(ExecutionContext context, StringBuilder bld, int width, int flags, int precision) {
 			Object o = context.getReturnBuffer().get0();
 			ByteString sv = Conversions.stringValueOf(o);
-			String s = sv != null ? sv.toString() : "";
+			String s = sv != null ? sv.toRawString() : "";
 			bld.append(justified(width, flags, trimmed(precision, s)));
 		}
 
@@ -1448,7 +1448,8 @@ public final class StringLib {
 
 		@Override
 		protected void invoke(ExecutionContext context, ArgumentIterator args) throws ResolvedControlThrowable {
-			String fmt = args.nextString().toString();  // FIXME
+			// raw strings, as for patterns: one char for each byte
+			String fmt = args.nextString().toRawString();
 			StringBuilder bld = new StringBuilder();
 			run(context, fmt, args, bld, 0);
 		}
@@ -1475,7 +1476,7 @@ public final class StringLib {
 				}
 			} while (idx >= 0);
 
-			context.getReturnBuffer().setTo(bld.toString());
+			context.getReturnBuffer().setTo(ByteString.fromRaw(bld.toString()));
 		}
 
 	}
