@@ -107,8 +107,14 @@ import net.sandius.rembulan.util.Check;
  * non-space characters.
  * </p>
  *
- * The definitions of letter, space, and other character groups depend on the current locale. In
- * particular, the class {@code [a-z]} may not be equivalent to {@code %l}.
+ * The definitions of letter, space, and other character groups are those of the C locale, so a
+ * byte from 128 on belongs to none of them.
+ *
+ * <p>
+ * A pattern works on bytes, as a Lua string holds bytes. So a character that UTF-8 encodes as two
+ * bytes is two characters here, and positions count bytes. This class gets its strings raw, with
+ * one {@code char} for each byte: see {@link net.sandius.rembulan.ByteString#toRawString()}.
+ * </p>
  *
  * <h2>Pattern Item:</h2>
  *
@@ -181,10 +187,33 @@ public class StringPattern {
   }
 
   private static final String MAGIC_CHARS = "^$()%.[]*+-?";
-  private static final String PUNCTUATION_CHARS = ".,;:?!";
 
   private static boolean isMagic(char c) {
     return MAGIC_CHARS.indexOf(c) != -1;
+  }
+
+  private static boolean isUpper(char c) {
+    return c >= 'A' && c <= 'Z';
+  }
+
+  private static boolean isLower(char c) {
+    return c >= 'a' && c <= 'z';
+  }
+
+  private static boolean isDigit(char c) {
+    return c >= '0' && c <= '9';
+  }
+
+  private static boolean isAlpha(char c) {
+    return isUpper(c) || isLower(c);
+  }
+
+  private static boolean isAlnum(char c) {
+    return isAlpha(c) || isDigit(c);
+  }
+
+  private static boolean isGraph(char c) {
+    return c > ' ' && c < 127;
   }
 
   public static class Match {
@@ -398,30 +427,28 @@ public class StringPattern {
           char ch = (char) c;
           switch (desc) {
             case LETTERS:
-              return complement != Character.isLetter(ch);
+              return complement != isAlpha(ch);
             case LOWERCASE_LETTERS:
-              return complement != (Character.isLetter(ch) && Character.isLowerCase(ch));
+              return complement != isLower(ch);
             case UPPERCASE_LETTERS:
-              return complement != (Character.isLetter(ch) && Character.isUpperCase(ch));
+              return complement != isUpper(ch);
             case DECIMAL_DIGITS:
-              return complement != (ch >= '0' && ch <= '9');
+              return complement != isDigit(ch);
             case HEXADECIMAL_DIGITS:
-              return complement != ((ch >= '0' && ch <= '9') || (ch >= 'a' && ch <= 'f')
+              return complement != (isDigit(ch) || (ch >= 'a' && ch <= 'f')
                   || (ch >= 'A' && ch <= 'F'));
-            case ALPHANUMERIC: {
-              char lc = Character.toLowerCase(ch);
-              return complement != ((lc >= '0' && lc <= '9') || (lc >= 'a' && lc <= 'z'));
-            }
+            case ALPHANUMERIC:
+              return complement != isAlnum(ch);
             case SPACE:
-              return complement != Character.isWhitespace(ch);
+              return complement != (ch == ' ' || (ch >= '\t' && ch <= '\r'));
             case CONTROL_CHARS:
-              return complement != Character.isISOControl(ch);
+              return complement != (ch < ' ' || ch == 127);
             case PUNCTUATION:
-              return complement != (PUNCTUATION_CHARS.indexOf(ch) != -1);
+              return complement != (isGraph(ch) && !isAlnum(ch));
             case NULL_BYTE:
               return (complement != (c == 0));
             case PRINTABLE_EXCEPT_SPACE:
-              return complement != (!Character.isISOControl(ch) && ch != ' ');
+              return complement != isGraph(ch);
 
             default:
               throw new IllegalStateException();

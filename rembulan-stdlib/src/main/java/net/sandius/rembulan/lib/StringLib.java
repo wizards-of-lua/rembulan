@@ -702,6 +702,16 @@ public final class StringLib {
 		return Math.max(0, Math.min(len, j));
 	}
 
+	// StringPattern works on raw strings, with one char for each byte. Captures are raw strings
+	// or positions, and this makes them what a Lua program gets to see.
+	private static List<Object> toLuaValues(List<Object> captures) {
+		List<Object> result = new ArrayList<>(captures.size());
+		for (Object capture : captures) {
+			result.add(capture instanceof String ? ByteString.fromRaw((String) capture) : capture);
+		}
+		return result;
+	}
+
 	private static byte toLower(byte b) {
 		int c = b & 0xff;
 		// FIXME: dealing with ASCII only
@@ -819,8 +829,8 @@ public final class StringLib {
 
 		@Override
 		protected void invoke(ExecutionContext context, ArgumentIterator args) throws ResolvedControlThrowable {
-			String s = args.nextString().toString();  // FIXME
-			String pattern = args.nextString().toString();  // FIXME
+			String s = args.nextString().toRawString();
+			String pattern = args.nextString().toRawString();
 			int init = args.nextOptionalInt(1);
 			boolean plain = args.nextOptionalBoolean(false);
 
@@ -848,7 +858,7 @@ public final class StringLib {
 					List<Object> result = new ArrayList<>();
 					result.add((long) (m.beginIndex() + 1));
 					result.add((long) m.endIndex());
-					result.addAll(m.captures());
+					result.addAll(toLuaValues(m.captures()));
 					context.getReturnBuffer().setToContentsOf(result);
 				}
 				else {
@@ -1503,10 +1513,10 @@ public final class StringLib {
 						index.set(endIndex);
 
 						if (!m.captures().isEmpty()) {
-							context.getReturnBuffer().setToContentsOf(m.captures());
+							context.getReturnBuffer().setToContentsOf(toLuaValues(m.captures()));
 						}
 						else {
-							context.getReturnBuffer().setTo(m.fullMatch());
+							context.getReturnBuffer().setTo(ByteString.fromRaw(m.fullMatch()));
 						}
 					}
 					else {
@@ -1534,8 +1544,8 @@ public final class StringLib {
 
 		@Override
 		protected void invoke(ExecutionContext context, ArgumentIterator args) throws ResolvedControlThrowable {
-			String s = args.nextString().toString();  // FIXME
-			String pattern = args.nextString().toString();  // FIXME
+			String s = args.nextString().toRawString();
+			String pattern = args.nextString().toRawString();
 
 			StringPattern pat = StringPattern.fromString(pattern, true);
 
@@ -1557,8 +1567,8 @@ public final class StringLib {
 
 		@Override
 		protected void invoke(ExecutionContext context, ArgumentIterator args) throws ResolvedControlThrowable {
-			String s = args.nextString().toString();  // FIXME
-			String pattern = args.nextString().toString();  // FIXME
+			String s = args.nextString().toRawString();
+			String pattern = args.nextString().toRawString();
 
 			final Object repl;
 			if (!args.hasNext()) {
@@ -1570,7 +1580,7 @@ public final class StringLib {
 				// a string?
 				ByteString replStr = Conversions.stringValueOf(o);
 				if (replStr != null) {
-					repl = replStr.toString();
+					repl = replStr.toRawString();
 				}
 				else if (o instanceof Table || o instanceof LuaFunction) {
 					repl = o;
@@ -1631,9 +1641,9 @@ public final class StringLib {
 					bld.append(str.substring(idx, m.beginIndex()));
 				}
 
-				List<Object> captures = m.captures().isEmpty()
+				List<Object> captures = toLuaValues(m.captures().isEmpty()
 						? Collections.singletonList((Object) m.fullMatch())
-						: m.captures();
+						: m.captures());
 
 				// avoid looping indefinitely for empty matches
 				idx = m.endIndex() != idx ? m.endIndex() : m.endIndex() + 1;
@@ -1655,7 +1665,7 @@ public final class StringLib {
 				bld.append(str.substring(idx, str.length()));
 			}
 
-			context.getReturnBuffer().setTo(bld.toString(), (long) count);
+			context.getReturnBuffer().setTo(ByteString.fromRaw(bld.toString()), (long) count);
 		}
 
 		private static String stringReplace(String s, String fullMatch, List<Object> captures) {
@@ -1678,7 +1688,7 @@ public final class StringLib {
 								// captures are either strings or integers
 								ByteString sv = Conversions.stringValueOf(captures.get(idx - 1));
 								assert (sv != null);
-								bld.append(sv);
+								bld.append(sv.toRawString());
 							}
 							else {
 								// no capture with this index
@@ -1736,7 +1746,7 @@ public final class StringLib {
 			Object value = context.getReturnBuffer().get0();
 			ByteString sv = Conversions.stringValueOf(value);
 			if (sv != null) {
-				bld.append(sv);
+				bld.append(sv.toRawString());
 			}
 			else {
 				if (!Conversions.booleanValueOf(value)) {
@@ -1799,8 +1809,8 @@ public final class StringLib {
 
 		@Override
 		protected void invoke(ExecutionContext context, ArgumentIterator args) throws ResolvedControlThrowable {
-			String s = args.nextString().toString();  // FIXME
-			String pattern = args.nextString().toString();  // FIXME
+			String s = args.nextString().toRawString();
+			String pattern = args.nextString().toRawString();
 			int init = args.nextOptionalInt(1);
 
 			init = lowerBound(init, s.length());
@@ -1810,10 +1820,10 @@ public final class StringLib {
 			StringPattern.Match m = pat.match(s, init - 1);
 			if (m != null) {
 				if (m.captures().isEmpty()) {
-					context.getReturnBuffer().setTo(m.fullMatch());
+					context.getReturnBuffer().setTo(ByteString.fromRaw(m.fullMatch()));
 				}
 				else {
-					context.getReturnBuffer().setToContentsOf(m.captures());
+					context.getReturnBuffer().setToContentsOf(toLuaValues(m.captures()));
 				}
 			}
 			else {
