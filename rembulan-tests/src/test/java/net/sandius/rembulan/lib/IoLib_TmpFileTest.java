@@ -3,10 +3,13 @@ package net.sandius.rembulan.lib;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.nio.channels.SeekableByteChannel;
 import java.nio.file.FileSystem;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.stream.Stream;
 import org.junit.FixMethodOrder;
 import org.junit.Test;
@@ -45,14 +48,26 @@ public class IoLib_TmpFileTest extends TestBase {
 
   /** The system environment, but with its temporary files in {@code dir}. */
   private static RuntimeEnvironment tempFilesIn(Path dir) {
+    return tempFilesIn(dir, new ArrayList<>(), new ArrayList<>());
+  }
+
+  /**
+   * The system environment, but with its temporary files in {@code dir}; the path and channel of
+   * each temporary file are added to {@code paths} and {@code channels}.
+   */
+  private static RuntimeEnvironment tempFilesIn(Path dir, List<Path> paths,
+      List<SeekableByteChannel> channels) {
     RuntimeEnvironment system = RuntimeEnvironments.system();
     return new DelegatingEnvironment(system) {
       @Override
       public TempFileFactory tempFileFactory() {
         return () -> {
           Path path = Files.createTempFile(dir, "lua", ".tmp");
-          return Files.newByteChannel(path, StandardOpenOption.READ, StandardOpenOption.WRITE,
-              StandardOpenOption.DELETE_ON_CLOSE);
+          SeekableByteChannel channel = Files.newByteChannel(path, StandardOpenOption.READ,
+              StandardOpenOption.WRITE, StandardOpenOption.DELETE_ON_CLOSE);
+          paths.add(path);
+          channels.add(channel);
+          return channel;
         };
       }
     };
@@ -89,15 +104,22 @@ public class IoLib_TmpFileTest extends TestBase {
     // Given:
     Path dir = createTempFilename();
     Files.createDirectories(dir);
-    install(tempFilesIn(dir));
+    List<Path> paths = new ArrayList<>();
+    List<SeekableByteChannel> channels = new ArrayList<>();
+    install(tempFilesIn(dir, paths, channels));
 
     // When:
     exec("tmp = io.tmpfile(); tmp:write('hello')");
-    long whileOpen = countFiles(dir);
+    boolean openBeforeClose = channels.get(0).isOpen();
     exec("tmp:close()");
 
-    // Then:
-    assertThat(whileOpen).isEqualTo(1);
+    // Then: the file's channel was closed, and the file is gone. Whether the file can be seen in
+    // the directory while it is open depends on the platform: on Windows it stays until it is
+    // closed, on Linux and macOS the JDK unlinks it right after opening it (DELETE_ON_CLOSE).
+    assertThat(paths).hasSize(1);
+    assertThat(openBeforeClose).isTrue();
+    assertThat(channels.get(0).isOpen()).isFalse();
+    assertThat(Files.exists(paths.get(0))).isFalse();
     assertThat(countFiles(dir)).isEqualTo(0);
   }
 
