@@ -4,10 +4,16 @@ plugins {
   id 'eclipse'
 }
 
-subprojects {
+allprojects {
   group = 'net.wizardsoflua.rembulan'
   version = '0.5.2'
+}
 
+// The release goes to build/release/: a Maven repository of all modules in maven/ and
+// release.properties with the version (the contract with the release build service).
+def releaseDir = layout.buildDirectory.dir('release')
+
+subprojects {
   apply plugin: 'java-library'
   apply plugin: 'maven-publish'
   apply plugin: 'eclipse'
@@ -59,7 +65,34 @@ subprojects {
           password = findProperty('repoPass')
         }
       }
+      maven {
+        name = 'release'
+        url = releaseDir.map { it.dir('maven') }
+      }
     }
+  }
+
+  // Nothing lands in build/release/ before every module is built and tested.
+  tasks.matching { it.name == 'publishMavenJavaPublicationToReleaseRepository' }.configureEach {
+    mustRunAfter ':cleanRelease'
+    mustRunAfter rootProject.subprojects.collect { "${it.path}:build" }
+  }
+}
+
+tasks.register('cleanRelease', Delete) {
+  delete releaseDir
+}
+
+tasks.register('release') {
+  group = 'publishing'
+  description = 'Builds and tests all modules and writes the release to build/release/.'
+  dependsOn 'cleanRelease'
+  dependsOn subprojects.collect { "${it.path}:build" }
+  dependsOn subprojects.collect { "${it.path}:publishMavenJavaPublicationToReleaseRepository" }
+  def releaseVersion = version.toString()
+  def propertiesFile = releaseDir.map { it.file('release.properties') }
+  doLast {
+    propertiesFile.get().asFile.text = "version=${releaseVersion}\n"
   }
 }
 
