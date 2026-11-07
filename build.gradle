@@ -6,7 +6,7 @@ plugins {
 
 allprojects {
   group = 'net.wizardsoflua.rembulan'
-  version = '0.5.2'
+  version = '0.5.3'
 }
 
 // The release goes to build/release/: a Maven repository of all modules in maven/ and
