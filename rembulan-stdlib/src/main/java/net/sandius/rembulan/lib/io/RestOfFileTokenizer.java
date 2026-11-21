@@ -20,6 +20,12 @@ public class RestOfFileTokenizer extends AbstractTokenizer<ByteString> {
   }
 
   @Override
+  protected boolean handleBytes(byte[] buf, int from, int to) {
+    output.write(buf, from, to - from);
+    return true;
+  }
+
+  @Override
   protected ByteString toResult() {
     return ByteString.of(output);
   }

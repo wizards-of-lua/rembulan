@@ -25,7 +25,7 @@ import net.sandius.rembulan.ByteString;
  */
 class ChannelReader {
 
-  private final ByteBuffer byteBuffer = ByteBuffer.wrap(new byte[16]);
+  private final ByteBuffer byteBuffer = ByteBuffer.wrap(new byte[1024]);
   private final NumberTokenizer numberTokenizer = new NumberTokenizer(byteBuffer);
   private final LineTokenizer lineTokenizer = new LineTokenizer(byteBuffer);
   private final LineTokenizer lineWithEoLTokenizer = new LineTokenizer(byteBuffer, true);

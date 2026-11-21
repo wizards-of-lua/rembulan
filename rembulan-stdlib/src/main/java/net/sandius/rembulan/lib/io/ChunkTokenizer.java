@@ -37,6 +37,19 @@ public class ChunkTokenizer extends AbstractTokenizer<ByteString> {
   }
 
   @Override
+  protected boolean handleBytes(byte[] buf, int from, int to) {
+    if (length <= 0) {
+      // read(0) only tests for the end of the file, so the byte stays unread
+      peeked = true;
+      return false;
+    }
+    int n = (int) Math.min(to - from, length - count);
+    output.write(buf, from, n);
+    count += n;
+    return count < length;
+  }
+
+  @Override
   protected boolean hasResult() {
     return super.hasResult() || peeked;
   }
