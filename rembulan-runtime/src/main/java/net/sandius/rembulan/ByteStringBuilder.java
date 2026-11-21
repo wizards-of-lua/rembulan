@@ -49,7 +49,14 @@ public class ByteStringBuilder {
 		return x + 1;
 	}
 
+	// the largest array the JVM can allocate
+	private static final int MAX_CAPACITY = Integer.MAX_VALUE - 8;
+
 	private static int idealCapacity(int desired) {
+		if (desired > MAX_CAPACITY / 2 + 1) {
+			// the next power of 2 would overflow: grow by half, up to the largest array
+			return desired >= MAX_CAPACITY ? desired : (int) Math.min((long) desired * 3 / 2, MAX_CAPACITY);
+		}
 		int ceil = binaryCeil(desired);
 		return Math.max(ceil, MIN_CAPACITY);
 	}
