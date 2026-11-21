@@ -131,6 +131,12 @@ class StringByteString extends ByteString {
 	}
 
 	@Override
+	public int lengthEstimate() {
+		// a char takes at least one byte
+		return byteLength >= 0 ? byteLength : string.length();
+	}
+
+	@Override
 	public boolean isEmpty() {
 		return string.isEmpty();
 	}

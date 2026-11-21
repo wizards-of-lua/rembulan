@@ -168,6 +168,25 @@ public interface ExecutionContext extends StateContext {
 	void registerTicks(int ticks);
 
 	/**
+	 * Informs the scheduler that a library function is about to consume or has consumed
+	 * {@code ticks} virtual ticks in work that can't be paused, such as matching a pattern or
+	 * building a long string in Java. Such work calls this every so often while it runs.
+	 *
+	 * <p>The scheduler may stop the work by throwing an unchecked exception from this method,
+	 * such as a {@link net.sandius.rembulan.LuaRuntimeException}
+	 * (see {@link SchedulingContext#registerTicksUnpausable(int)}).</p>
+	 *
+	 * <p>The default implementation calls {@link #registerTicks(int)}.</p>
+	 *
+	 * <p>The behaviour of this method is undefined if {@code ticks} is negative.</p>
+	 *
+	 * @param ticks  number of ticks to be registered with the scheduler, must not be negative
+	 */
+	default void registerTicksUnpausable(int ticks) {
+		registerTicks(ticks);
+	}
+
+	/**
 	 * Pauses the execution if the according to the scheduler this call should be paused.
 	 * <b>This method throws an {@link UnresolvedControlThrowable}</b>: non-local control
 	 * changes are expected to be resolved by the caller of this method.

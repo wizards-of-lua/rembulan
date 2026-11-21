@@ -18,6 +18,7 @@ import java.nio.ByteBuffer;
 import java.nio.channels.SeekableByteChannel;
 import java.util.Objects;
 import net.sandius.rembulan.ByteString;
+import net.sandius.rembulan.runtime.WorkMeter;
 
 /**
  * Reads the formats of {@code file:read} from a channel. Each read leaves the channel positioned
@@ -36,6 +37,18 @@ class ChannelReader {
 
   ChannelReader(SeekableByteChannel channel) {
     this.channel = Objects.requireNonNull(channel);
+  }
+
+  /**
+   * Sets the meter that charges the bytes the following reads take, so that the scheduler can
+   * stop a read that takes too long; {@code null} for none.
+   */
+  void setMeter(WorkMeter meter) {
+    numberTokenizer.setMeter(meter);
+    lineTokenizer.setMeter(meter);
+    lineWithEoLTokenizer.setMeter(meter);
+    restOfFileTokenizer.setMeter(meter);
+    chunkTokenizer.setMeter(meter);
   }
 
   ByteString readLine(boolean returnEol) throws IOException {

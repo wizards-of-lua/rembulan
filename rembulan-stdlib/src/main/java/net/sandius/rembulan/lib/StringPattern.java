@@ -43,6 +43,8 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
+import net.sandius.rembulan.runtime.ExecutionContext;
+import net.sandius.rembulan.runtime.WorkMeter;
 import net.sandius.rembulan.util.Check;
 
 /**
@@ -254,9 +256,26 @@ public class StringPattern {
 
   // returns null to signal no-match
   public Match match(String s, int fromIndex) {
+    return match(s, fromIndex, (ExecutionContext) null);
+  }
+
+  /**
+   * Like {@link #match(String, int)}, but charges the steps of the match to {@code context}
+   * (see {@link ExecutionContext#registerTicksUnpausable(int)}), so that the scheduler can stop a
+   * match that takes too long.
+   *
+   * @param context  the context to charge, or {@code null} to charge nothing
+   */
+  public Match match(String s, int fromIndex, ExecutionContext context) {
+    return match(s, fromIndex, WorkMeter.forPatternSteps(context));
+  }
+
+  // returns null to signal no-match
+  Match match(String s, int fromIndex, WorkMeter meter) {
     // iterate one character beyond the last one: empty matches succeed at EOS
     while (fromIndex >= 0 && fromIndex <= s.length()) {
-      MatchState ms = new MatchState(items, s, fromIndex);
+      meter.steps(WorkMeter.PATTERN_STEPS_PER_POSITION);
+      MatchState ms = new MatchState(items, s, fromIndex, meter);
       int result = ms.start();
       if (result != NO_MATCH) {
         // got a match
@@ -511,18 +530,21 @@ public class StringPattern {
     private final int strIdx;
     private final int[] capBegin;
     private final Object[] cap;
+    private final WorkMeter meter;
 
-    MatchState(int piIdx, List<PI> pis, String str, int strIdx, int[] capBegin, Object[] cap) {
+    MatchState(int piIdx, List<PI> pis, String str, int strIdx, int[] capBegin, Object[] cap,
+        WorkMeter meter) {
       this.piIdx = piIdx;
       this.pis = pis;
       this.str = str;
       this.strIdx = strIdx;
       this.capBegin = capBegin;
       this.cap = cap;
+      this.meter = meter;
     }
 
-    MatchState(List<PI> pis, String str, int strIdx) {
-      this(0, pis, str, strIdx, new int[numCaptures], new Object[numCaptures]);
+    MatchState(List<PI> pis, String str, int strIdx, WorkMeter meter) {
+      this(0, pis, str, strIdx, new int[numCaptures], new Object[numCaptures], meter);
     }
 
     private PI pi() {
@@ -531,7 +553,7 @@ public class StringPattern {
 
     private MatchState nextState(int strIdx) {
       if (piIdx + 1 < pis.size()) {
-        return new MatchState(piIdx + 1, pis, str, strIdx, capBegin, cap);
+        return new MatchState(piIdx + 1, pis, str, strIdx, capBegin, cap, meter);
       } else {
         return null;
       }
@@ -547,6 +569,7 @@ public class StringPattern {
     }
 
     public int next(int strIdx) {
+      meter.steps(1);
       MatchState ms = nextState(strIdx);
       if (ms != null) {
         return ms.pi().match(ms);
@@ -650,6 +673,7 @@ public class StringPattern {
               i++;
             }
             max = i;
+            ms.meter.steps(max - min);
           }
 
           for (int j = max; j >= min; j--) {
@@ -672,6 +696,7 @@ public class StringPattern {
               i++;
             }
             max = i;
+            ms.meter.steps(max - min);
           }
 
           // up to max included: the rest may only match after the whole run
@@ -697,6 +722,7 @@ public class StringPattern {
                 i++;
               }
               max = i;
+              ms.meter.steps(max - min);
             }
 
             for (int j = max; j >= min; j--) {
@@ -753,6 +779,8 @@ public class StringPattern {
 
       if (o instanceof String) {
         String cs = (String) o;
+        // comparing a character costs about an eighth of a step
+        ms.meter.steps(1 + cs.length() / 8);
         int offset = ms.strIdx;
         for (int i = 0; i < cs.length(); i++) {
           if (offset + i >= ms.str.length()) {
@@ -802,6 +830,10 @@ public class StringPattern {
 
       int balance = 0;
       while (idx < ms.str.length()) {
+        // a character costs about a quarter of a step
+        if (((idx - ms.strIdx) & 3) == 0) {
+          ms.meter.steps(1);
+        }
         char c = ms.str.charAt(idx);
         if (c == first) {
           balance += 1;

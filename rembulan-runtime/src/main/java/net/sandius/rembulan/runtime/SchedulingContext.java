@@ -22,7 +22,8 @@ package net.sandius.rembulan.runtime;
  * <p>The interface specifies two methods: {@link #registerTicks(int)} and {@link #shouldPause()}.
  * The former is used by an {@link ExecutionContext} to register ticks spent in executing
  * a Lua program; the latter is used by ExecutionContexts to determine whether the execution
- * should be paused.</p>
+ * should be paused. Library functions doing long work in Java register its ticks with
+ * {@link #registerTicksUnpausable(int)}.</p>
  *
  * <p>For basic implementations of this interface, see the utility class
  * {@link net.sandius.rembulan.impl.SchedulingContexts}.</p>
@@ -45,6 +46,29 @@ public interface SchedulingContext {
 	 * @param ticks  number of ticks to be registered with the scheduler, must not be negative
 	 */
 	void registerTicks(int ticks);
+
+	/**
+	 * Informs the scheduler that a library function is about to consume or has consumed
+	 * {@code ticks} virtual ticks in work that can't be paused, such as matching a pattern or
+	 * building a long string in Java.
+	 *
+	 * <p>Such work registers its ticks every so often while it runs. Before its first
+	 * registration, a call registers 0 ticks with {@link #registerTicks(int)}: so the ticks
+	 * registered here since the last {@code registerTicks} are those of one call. Unlike after
+	 * {@link #registerTicks(int)}, the execution can't be paused here: a scheduler that wants
+	 * to stop the work may throw an unchecked exception instead, such as a
+	 * {@link net.sandius.rembulan.LuaRuntimeException}, which aborts the library function with
+	 * a Lua error.</p>
+	 *
+	 * <p>The default implementation calls {@link #registerTicks(int)}.</p>
+	 *
+	 * <p>The behaviour of this method is undefined if {@code ticks} is negative.</p>
+	 *
+	 * @param ticks  number of ticks to be registered with the scheduler, must not be negative
+	 */
+	default void registerTicksUnpausable(int ticks) {
+		registerTicks(ticks);
+	}
 
 	/**
 	 * Polls the scheduler, returning {@code true} if the current task should be paused.

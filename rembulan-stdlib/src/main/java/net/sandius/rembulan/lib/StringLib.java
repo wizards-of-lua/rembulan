@@ -57,6 +57,7 @@ import net.sandius.rembulan.impl.UnimplementedFunction;
 import net.sandius.rembulan.runtime.AbstractFunction0;
 import net.sandius.rembulan.runtime.Dispatch;
 import net.sandius.rembulan.runtime.ExecutionContext;
+import net.sandius.rembulan.runtime.WorkMeter;
 import net.sandius.rembulan.runtime.IllegalOperationAttemptException;
 import net.sandius.rembulan.runtime.LuaFunction;
 import net.sandius.rembulan.runtime.ResolvedControlThrowable;
@@ -852,7 +853,7 @@ public final class StringLib {
 				// find a pattern
 				StringPattern pat = StringPattern.fromString(pattern);
 
-				StringPattern.Match m = pat.match(s, init - 1);
+				StringPattern.Match m = pat.match(s, init - 1, context);
 
 				if (m != null) {
 					List<Object> result = new ArrayList<>();
@@ -1501,7 +1502,7 @@ public final class StringLib {
 				int idx = index.get();
 
 				if (idx >= 0) {
-					StringPattern.Match m = pattern.match(string, idx);
+					StringPattern.Match m = pattern.match(string, idx, context);
 
 					if (m != null) {
 						// found a match
@@ -1627,8 +1628,12 @@ public final class StringLib {
 		private void run(ExecutionContext context, String str, int idx, StringBuilder bld, StringPattern pat, int count, int num, Object repl)
 				throws ResolvedControlThrowable {
 
+			// charges the work of the matches and the result, so that the scheduler can stop a
+			// call that takes too long
+			WorkMeter work = WorkMeter.forPatternSteps(context);
+
 			while (count < num) {
-				StringPattern.Match m = pat.match(str, idx);
+				StringPattern.Match m = pat.match(str, idx, work);
 
 				if (m == null) {
 					// no more matches
@@ -1636,9 +1641,11 @@ public final class StringLib {
 				}
 
 				count += 1;
+				work.steps(WorkMeter.PATTERN_STEPS_PER_RESULT);
 
 				// non-matching prefix
 				if (idx < m.beginIndex()) {
+					work.addAppend(m.beginIndex() - idx);
 					bld.append(str.substring(idx, m.beginIndex()));
 				}
 
@@ -1651,6 +1658,7 @@ public final class StringLib {
 
 				if (repl instanceof String) {
 					String r = stringReplace((String) repl, m.fullMatch(), captures);
+					work.addAppend(r.length());
 					bld.append(r);
 				}
 				else {
@@ -1818,7 +1826,7 @@ public final class StringLib {
 
 			StringPattern pat = StringPattern.fromString(pattern);
 
-			StringPattern.Match m = pat.match(s, init - 1);
+			StringPattern.Match m = pat.match(s, init - 1, context);
 			if (m != null) {
 				if (m.captures().isEmpty()) {
 					context.getReturnBuffer().setTo(ByteString.fromRaw(m.fullMatch()));
@@ -1869,17 +1877,16 @@ public final class StringLib {
 			ByteString sep = args.nextOptionalString(ByteString.empty());
 
 			final ByteString result;
-			if (n > 0) {
-				ByteStringBuilder bld = new ByteStringBuilder();
-
-				for (int i = 0; i < n; i++) {
-					bld.append(s);
-					if (i + 1 < n) {
-						bld.append(sep);
-					}
+			if (n > 0 && (s.length() > 0 || sep.length() > 0)) {
+				long length = (long) s.length() * n + (long) sep.length() * (n - 1);
+				if (length > ByteString.MAX_LENGTH) {
+					throw new LuaRuntimeException("resulting string too large");
 				}
 
-				result = bld.toByteString();
+				// charges the whole work before it is done, so that the scheduler can stop a call
+				// that would take too long before it allocates the result
+				WorkMeter.forBytes(context).steps(length);
+				result = s.repeat(n, sep);
 			}
 			else {
 				result = ByteString.empty();

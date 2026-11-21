@@ -51,6 +51,12 @@ import net.sandius.rembulan.util.ByteIterator;
  */
 public abstract class ByteString implements Comparable<ByteString> {
 
+	/**
+	 * The greatest length of a byte string that library functions and the concatenation
+	 * operator build: the size limit of a Java array.
+	 */
+	public static final int MAX_LENGTH = Integer.MAX_VALUE - 8;
+
 	ByteString() {
 		// no-op: package-private to restrict access
 	}
@@ -272,6 +278,15 @@ public abstract class ByteString implements Comparable<ByteString> {
 	abstract int maybeLength();
 
 	/**
+	 * Returns the length of this byte string in bytes if that is cheap to get, otherwise a lower
+	 * bound of it that is: for a byte string made from a {@code String} whose bytes haven't been
+	 * counted yet, the number of its chars.
+	 *
+	 * @return  the length of this byte string, or a lower bound of it
+	 */
+	public abstract int lengthEstimate();
+
+	/**
 	 * Returns {@code true} iff this byte string is empty, i.e., if the number of bytes it
 	 * contains is 0.
 	 *
@@ -456,6 +471,49 @@ public abstract class ByteString implements Comparable<ByteString> {
 	 */
 	public ByteString concat(String other) {
 		return this.concat(ByteString.of(other));
+	}
+
+	/**
+	 * Returns a byte string of {@code n} copies of this byte string, with {@code separator}
+	 * between them, like Lua's {@code string.rep}. The result is built in one array, by
+	 * doubling what has been copied so far.
+	 *
+	 * @param n  the number of copies; the empty string if not positive
+	 * @param separator  the byte string between two copies, must not be {@code null}
+	 * @return  the repeated byte string
+	 *
+	 * @throws IllegalArgumentException  if the result would be longer than {@link #MAX_LENGTH}
+	 * @throws NullPointerException  if {@code separator} is {@code null}
+	 */
+	public ByteString repeat(int n, ByteString separator) {
+		Objects.requireNonNull(separator);
+		if (n <= 0) {
+			return empty();
+		}
+		byte[] piece = getBytes();
+		byte[] sep = separator.getBytes();
+		long length = (long) piece.length * n + (long) sep.length * (n - 1);
+		if (length > MAX_LENGTH) {
+			throw new IllegalArgumentException("resulting string too large");
+		}
+		if (length == 0) {
+			return empty();
+		}
+		byte[] result = new byte[(int) length];
+		System.arraycopy(piece, 0, result, 0, piece.length);
+		int filled = piece.length;
+		if (n > 1) {
+			// one period of the result: the piece and a separator
+			System.arraycopy(sep, 0, result, filled, sep.length);
+			filled += sep.length;
+			// whole periods double; the last copy is cut short, so it ends with a piece
+			while (filled < length) {
+				int count = (int) Math.min(filled, length - filled);
+				System.arraycopy(result, 0, result, filled, count);
+				filled += count;
+			}
+		}
+		return wrap(result);
 	}
 
 	// TODO: add startsWith(ByteString)

@@ -4,6 +4,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.SeekableByteChannel;
+import net.sandius.rembulan.runtime.WorkMeter;
 
 public abstract class AbstractTokenizer<R> {
 
@@ -12,10 +13,19 @@ public abstract class AbstractTokenizer<R> {
   protected final ByteBuffer byteBuffer;
   protected ByteArrayOutputStream output;
   protected long skip;
+  private WorkMeter meter;
 
   public AbstractTokenizer(ByteBuffer byteBuffer) {
     super();
     this.byteBuffer = byteBuffer;
+  }
+
+  /**
+   * Sets the meter that charges the bytes the following tokens take, so that the scheduler can
+   * stop a read that takes too long; {@code null} for none.
+   */
+  public void setMeter(WorkMeter meter) {
+    this.meter = meter;
   }
 
   public final R nextToken(SeekableByteChannel channel) throws IOException {
@@ -37,8 +47,12 @@ public abstract class AbstractTokenizer<R> {
         continue;
       }
 
+      long before = skip + output.size();
       int from = byteBuffer.arrayOffset() + byteBuffer.position();
       boolean doContinue = handleBytes(byteBuffer.array(), from, from + byteBuffer.remaining());
+      if (meter != null) {
+        meter.steps(skip + output.size() - before);
+      }
       if (!doContinue) {
         break;
       }

@@ -93,6 +93,11 @@ class ArrayByteString extends ByteString {
 	}
 
 	@Override
+	public int lengthEstimate() {
+		return length();
+	}
+
+	@Override
 	int maybeLength() {
 		return bytes.length;
 	}

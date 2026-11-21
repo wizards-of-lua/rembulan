@@ -19,6 +19,7 @@ import java.io.InputStream;
 import java.util.Objects;
 
 import net.sandius.rembulan.ByteString;
+import net.sandius.rembulan.runtime.WorkMeter;
 import net.sandius.rembulan.Table;
 import net.sandius.rembulan.lib.IoFile;
 
@@ -85,6 +86,11 @@ public class InputStreamIoFile extends IoFile {
   @Override
   public ByteString readRestOfFile() throws IOException {
     return reader.readRestOfFile();
+  }
+
+  @Override
+  protected void setReadMeter(WorkMeter meter) {
+    reader.setMeter(meter);
   }
 
   @Override

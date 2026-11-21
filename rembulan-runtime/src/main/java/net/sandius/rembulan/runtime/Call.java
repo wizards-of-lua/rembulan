@@ -395,6 +395,11 @@ class Call {
 		}
 
 		@Override
+		public void registerTicksUnpausable(int ticks) {
+			schedulingContext.registerTicksUnpausable(ticks);
+		}
+
+		@Override
 		public void pauseIfRequested() throws UnresolvedControlThrowable {
 			if (schedulingContext.shouldPause()) {
 				pause();

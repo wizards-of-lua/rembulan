@@ -28,6 +28,7 @@ import net.sandius.rembulan.runtime.AbstractFunctionAnyArg;
 import net.sandius.rembulan.runtime.ExecutionContext;
 import net.sandius.rembulan.runtime.ResolvedControlThrowable;
 import net.sandius.rembulan.runtime.ReturnBuffer;
+import net.sandius.rembulan.runtime.WorkMeter;
 
 /**
  * A file handle used by the {@link IoLib I/O library}.
@@ -85,6 +86,12 @@ public abstract class IoFile extends DefaultUserdata {
   public abstract ByteString readRestOfFile() throws IOException;
 
   public abstract ByteString readChunk(long len) throws IOException;
+
+  /**
+   * Sets the meter that charges the bytes the following reads take, so that the scheduler can
+   * stop a read that takes too long; {@code null} for none. The default ignores it.
+   */
+  protected void setReadMeter(WorkMeter meter) {}
 
   public enum Whence {
     BEGINNING, CURRENT_POSITION, END
@@ -266,6 +273,7 @@ public abstract class IoFile extends DefaultUserdata {
       List<Object> result = new ArrayList<>();
       try {
         f.checkClosed();
+        f.setReadMeter(WorkMeter.forReadBytes(context));
         do {
           Object formatSpecfifier = args.nextOptionalAny(DEFAULT_SPEC);
           Format format = Format.get(formatSpecfifier);
@@ -303,10 +311,15 @@ public abstract class IoFile extends DefaultUserdata {
         } while (args.hasNext());
       } catch (ClosedFileException | IllegalArgumentException ex) {
         throw IoLib.newLuaRuntimeException(ex);
+      } catch (LuaRuntimeException ex) {
+        // e.g. the scheduler stopping a read that takes too long
+        throw ex;
       } catch (Exception ex) {
         // e.g. reading a file opened for writing only
         IoLib.setErrorMessage(context.getReturnBuffer(), ex);
         return;
+      } finally {
+        f.setReadMeter(null);
       }
       context.getReturnBuffer().setToContentsOf(result);
     }
@@ -407,9 +420,13 @@ public abstract class IoFile extends DefaultUserdata {
     protected void invoke(ExecutionContext context, ArgumentIterator args)
         throws ResolvedControlThrowable {
       final IoFile f = args.nextUserdata(typeName(), IoFile.class);
+      // charges each string before it is written, so that the scheduler can stop a write that
+      // would take too long before it has begun
+      WorkMeter bytes = WorkMeter.forWriteBytes(context);
 
       while (args.hasNext()) {
         final ByteString s = args.nextString();
+        bytes.steps(s.lengthEstimate());
         try {
           f.write(s);
         } catch (ClosedFileException ex) {

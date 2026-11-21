@@ -53,6 +53,7 @@ import net.sandius.rembulan.StateContext;
 import net.sandius.rembulan.Table;
 import net.sandius.rembulan.runtime.Dispatch;
 import net.sandius.rembulan.runtime.ExecutionContext;
+import net.sandius.rembulan.runtime.WorkMeter;
 import net.sandius.rembulan.runtime.LuaFunction;
 import net.sandius.rembulan.runtime.ResolvedControlThrowable;
 import net.sandius.rembulan.runtime.ReturnBuffer;
@@ -341,9 +342,23 @@ public final class TableLib {
 
 		}
 
-		private static void appendToBuilder(ByteStringBuilder bld, long index, Object o) {
+		private static void appendSeparator(ByteStringBuilder bld, ByteString sep, WorkMeter bytes) {
+			bytes.addAppend(sep.length());
+			checkLength(bld, sep);
+			bld.append(sep);
+		}
+
+		private static void checkLength(ByteStringBuilder bld, ByteString s) {
+			if ((long) bld.length() + s.length() > ByteString.MAX_LENGTH) {
+				throw new LuaRuntimeException("resulting string too large");
+			}
+		}
+
+		private static void appendToBuilder(ByteStringBuilder bld, long index, Object o, WorkMeter bytes) {
 			ByteString s = Conversions.stringValueOf(o);
 			if (s != null) {
+				bytes.addAppend(s.length());
+				checkLength(bld, s);
 				bld.append(s);
 			}
 			else {
@@ -355,12 +370,14 @@ public final class TableLib {
 		}
 
 		private static void concatUsingRawGet(ExecutionContext context, Table t, ByteString sep, long i, long j) {
+			// charges its work, so that the scheduler can stop a call that takes too long
+			WorkMeter bytes = WorkMeter.forBytes(context);
 			ByteStringBuilder bld = new ByteStringBuilder();
 			for (long k = i; k <= j; k++) {
 				Object o = t.rawget(k);
-				appendToBuilder(bld, k, o);
+				appendToBuilder(bld, k, o, bytes);
 				if (k + 1 <= j) {
-					bld.append(sep);
+					appendSeparator(bld, sep, bytes);
 				}
 			}
 			context.getReturnBuffer().setTo(bld.toByteString());
@@ -429,17 +446,19 @@ public final class TableLib {
 					}
 
 					case STATE_LOOP: {
+						// charges its work, so that the scheduler can stop a call that takes too long
+						WorkMeter bytes = WorkMeter.forBytes(context);
 						while (true) {
 							// k now points to the *next* item to retrieve; we've just processed
 							// (k - 1), need to add it to the results
 
 							Object v = context.getReturnBuffer().get0();
-							appendToBuilder(bld, k, v);
+							appendToBuilder(bld, k, v, bytes);
 
 							// we may now continue
 							if (k <= j) {
 								// append the separator
-								bld.append(sep);
+								appendSeparator(bld, sep, bytes);
 
 								state = STATE_LOOP;
 								Dispatch.index(context, t, k++);  // may suspend
@@ -541,8 +560,10 @@ public final class TableLib {
 			}
 		}
 
-		private static void rawInsert(Table t, long pos, long len, Object value) {
+		// the meter charges the work, so that the scheduler can stop a call that takes too long
+		private static void rawInsert(Table t, long pos, long len, Object value, WorkMeter meter) {
 			for (long k = len + 1; k > pos; k--) {
+				meter.step();
 				t.rawset(k, t.rawget(k - 1));
 			}
 			t.rawset(pos, value);
@@ -634,7 +655,7 @@ public final class TableLib {
 
 			if (!TableUtil.hasIndexMetamethod(t) && !TableUtil.hasNewIndexMetamethod(t)) {
 				// raw case
-				rawInsert(t, pos, len, value);
+				rawInsert(t, pos, len, value, WorkMeter.forTableMoves(context));
 				context.getReturnBuffer().setTo();
 			}
 			else {
@@ -649,10 +670,13 @@ public final class TableLib {
 
 			// came from start_loop in the invoke path
 
+			// charges the work, so that the scheduler can stop a call that takes too long
+			WorkMeter meter = WorkMeter.forTableMoves(context);
 			try {
 				loop: while (true) {
 					switch (state) {
 						case _LOOP_TEST:
+							meter.step();
 							k -= 1;
 							state = _LOOP_TABGET;
 							if (k <= pos) {
@@ -779,16 +803,20 @@ public final class TableLib {
 				boolean overlap = a1 == a2 && (f < t && t <= e);
 
 				if (!TableUtil.hasIndexMetamethod(a1) && !TableUtil.hasNewIndexMetamethod(a2)) {
-					// raw case
+					// raw case; the meter charges the work, so that the scheduler can stop
+					// a call that takes too long
+					WorkMeter meter = WorkMeter.forTableMoves(context);
 					if (overlap) {
 						// same destination, range overlap
 						for (long idx = num - 1; idx >= 0; idx--) {
+							meter.step();
 							a2.rawset(t + idx, a1.rawget(f + idx));
 						}
 					}
 					else {
 						// different destination, or no range overlap
 						for (long idx = 0; idx < num; idx++) {
+							meter.step();
 							a2.rawset(t + idx, a1.rawget(f + idx));
 						}
 					}
@@ -810,10 +838,13 @@ public final class TableLib {
 		private void _run(ExecutionContext context, int state, Table a1, Table a2, long f, long t, long idx, long num, boolean asc)
 				throws ResolvedControlThrowable {
 
+			// charges the work, so that the scheduler can stop a call that takes too long
+			WorkMeter meter = WorkMeter.forTableMoves(context);
 			try {
 				while (true) {
 					switch (state) {
 						case 0: {
+							meter.step();
 							boolean done = asc ? idx >= num : idx < 0;
 							if (done) {
 								context.getReturnBuffer().setTo(a2);
@@ -925,7 +956,8 @@ public final class TableLib {
 			}
 		}
 
-		private static Object rawRemove(Table t, long pos, long len) {
+		// the meter charges the work, so that the scheduler can stop a call that takes too long
+		private static Object rawRemove(Table t, long pos, long len, WorkMeter meter) {
 			Object result = t.rawget(pos);
 
 			if (pos == 0 || pos == len || pos == len + 1) {
@@ -935,6 +967,7 @@ public final class TableLib {
 			else {
 				// shift down t[pos+1],...,t[len]; erase t[len]
 				for (long k = pos + 1; k <= len; k++) {
+					meter.step();
 					t.rawset(k - 1, t.rawget(k));
 				}
 				t.rawset(len, null);
@@ -1024,7 +1057,7 @@ public final class TableLib {
 
 			if (!TableUtil.hasIndexMetamethod(t) && !TableUtil.hasNewIndexMetamethod(t)) {
 				// raw case
-				Object result = rawRemove(t, pos, len);
+				Object result = rawRemove(t, pos, len, WorkMeter.forTableMoves(context));
 				context.getReturnBuffer().setTo(result);
 			}
 			else {
@@ -1072,10 +1105,13 @@ public final class TableLib {
 
 			// came from start_loop in the invoke path
 
+			// charges the work, so that the scheduler can stop a call that takes too long
+			WorkMeter meter = WorkMeter.forTableMoves(context);
 			try {
 				loop: while (true) {
 					switch (state) {
 						case _LOOP_TEST:
+							meter.step();
 							k += 1;
 							state = _LOOP_TABGET;
 							if (k > len) {
@@ -1250,7 +1286,8 @@ public final class TableLib {
 						? TableUtil.rawSequenceOrderingOf(t, 1, len) : null;
 
 				if (rawOrdering != null) {
-					rawSort(t, rawOrdering, len);
+					boolean strings = !(t.rawget(1) instanceof Number);
+					rawSort(t, rawOrdering, len, WorkMeter.forSortSteps(context, strings));
 				}
 				else {
 					go(context, t, comp, len);
@@ -1259,10 +1296,11 @@ public final class TableLib {
 
 		}
 
-		private static void rawSort(Table t, Ordering<Object> ordering, long len) {
+		// the meter charges the work, so that the scheduler can stop a call that takes too long
+		private static void rawSort(Table t, Ordering<Object> ordering, long len, WorkMeter meter) {
 			assert (len > 1);
 
-			rawHeapify(t, ordering, len);
+			rawHeapify(t, ordering, len, meter);
 
 			long end = len;
 			while (end > 1) {
@@ -1274,13 +1312,13 @@ public final class TableLib {
 				t.rawset(1, endValue);
 
 				end -= 1;
-				rawSiftDown(t, ordering, 1, end);
+				rawSiftDown(t, ordering, 1, end, meter);
 			}
 		}
 
-		private static void rawHeapify(Table t, Ordering<Object> ordering, long count) {
+		private static void rawHeapify(Table t, Ordering<Object> ordering, long count, WorkMeter meter) {
 			for (long start = count / 2; start >= 1; start--) {
-				rawSiftDown(t, ordering, start, count);
+				rawSiftDown(t, ordering, start, count, meter);
 			}
 		}
 
@@ -1487,10 +1525,11 @@ public final class TableLib {
 			t.rawset(b, va);
 		}
 
-		private static void rawSiftDown(Table t, Ordering<Object> ordering, long start, long end) {
+		private static void rawSiftDown(Table t, Ordering<Object> ordering, long start, long end, WorkMeter meter) {
 			long root = start;
 
 			while (root * 2 <= end) {
+				meter.step();
 				long child = root * 2;
 
 				final Object rootValue = t.rawget(root);

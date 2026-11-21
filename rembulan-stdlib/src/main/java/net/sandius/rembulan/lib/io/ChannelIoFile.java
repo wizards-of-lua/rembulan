@@ -19,6 +19,7 @@ import java.nio.channels.Channels;
 import java.nio.channels.SeekableByteChannel;
 import java.util.Objects;
 import net.sandius.rembulan.ByteString;
+import net.sandius.rembulan.runtime.WorkMeter;
 import net.sandius.rembulan.Table;
 import net.sandius.rembulan.lib.IoFile;
 
@@ -152,6 +153,11 @@ public class ChannelIoFile extends IoFile {
   public ByteString readRestOfFile() throws IOException {
     checkReadable();
     return reader.readRestOfFile();
+  }
+
+  @Override
+  protected void setReadMeter(WorkMeter meter) {
+    reader.setMeter(meter);
   }
 
   @Override

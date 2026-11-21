@@ -20,6 +20,7 @@ import net.sandius.rembulan.Arithmetic;
 import net.sandius.rembulan.ByteString;
 import net.sandius.rembulan.Conversions;
 import net.sandius.rembulan.LuaMathOperators;
+import net.sandius.rembulan.LuaRuntimeException;
 import net.sandius.rembulan.MetatableProvider;
 import net.sandius.rembulan.Metatables;
 import net.sandius.rembulan.Ordering;
@@ -1084,6 +1085,12 @@ public final class Dispatch {
 		ByteString sb = Conversions.stringValueOf(b);
 
 		if (sa != null && sb != null) {
+			// charge the copy before it is made, so that the scheduler can stop a huge one
+			long length = (long) sa.lengthEstimate() + sb.lengthEstimate();
+			if (length > ByteString.MAX_LENGTH) {
+				throw new LuaRuntimeException("resulting string too large");
+			}
+			WorkMeter.chargeBytes(context, length);
 			context.getReturnBuffer().setTo(sa.concat(sb));
 		}
 		else {
