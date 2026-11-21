@@ -39,6 +39,13 @@ subprojects {
     from(tasks.javadoc)
   }
 
+  // Every jar carries the licence (Apache-2.0 asks that it goes with every copy).
+  tasks.withType(Jar).configureEach {
+    from(rootProject.file('LICENSE.txt')) {
+      into('META-INF')
+    }
+  }
+
   tasks.withType(JavaCompile) {
     options.encoding = 'UTF-8'
   }
