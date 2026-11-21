@@ -165,7 +165,7 @@ public abstract class ByteString implements Comparable<ByteString> {
 			throw new IndexOutOfBoundsException("offset=" + offset + ", length=" + length);
 		}
 
-		return wrap(Arrays.copyOfRange(bytes, offset, length));
+		return wrap(Arrays.copyOfRange(bytes, offset, offset + length));
 	}
 
 	/**
