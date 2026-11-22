@@ -229,6 +229,14 @@ public abstract class ByteString implements Comparable<ByteString> {
 	abstract boolean equals(ByteString that);
 
 	/**
+	 * Returns the bytes of this byte string, without a copy: the array must not be modified
+	 * and must not escape.
+	 *
+	 * @return  the bytes of this byte string
+	 */
+	abstract byte[] bytes();
+
+	/**
 	 * Returns a new byte array containing the bytes of this byte string.
 	 *
 	 * @return  a new byte array
@@ -412,21 +420,42 @@ public abstract class ByteString implements Comparable<ByteString> {
 	public int compareTo(ByteString that) {
 		Objects.requireNonNull(that);
 
-		ByteIterator thisIterator = this.byteIterator();
-		ByteIterator thatIterator = that.byteIterator();
-
-		while (thisIterator.hasNext() && thatIterator.hasNext()) {
-			int thisByte = thisIterator.nextByte() & 0xff;
-			int thatByte = thatIterator.nextByte() & 0xff;
-			int diff = thisByte - thatByte;
-			if (diff != 0) return diff;
-		}
-
-		return thisIterator.hasNext()
-				? 1  // !thatIterator.hasNext() => that is shorter
-				: thatIterator.hasNext()
+		byte[] a = this.bytes();
+		byte[] b = that.bytes();
+		int index = mismatch(a, b);
+		return index < 0
+				? 0  // equal
+				: index == a.length
 						? -1  // this is shorter
-						: 0;  // equal length
+						: index == b.length
+								? 1  // that is shorter
+								: (a[index] & 0xff) - (b[index] & 0xff);
+	}
+
+	/**
+	 * Returns the index of the first byte in which this byte string and {@code that}
+	 * differ, or {@code -1} if they are equal: if one of them is a prefix of the other, the
+	 * length of the shorter one. It is the number of bytes that {@link #compareTo(ByteString)}
+	 * has to compare, unless they are equal.
+	 *
+	 * @param that  byte string to compare to, must not be {@code null}
+	 * @return  the index of the first byte that differs, or {@code -1} if there is none
+	 *
+	 * @throws NullPointerException  if {@code that} is {@code null}
+	 */
+	public int mismatch(ByteString that) {
+		Objects.requireNonNull(that);
+		return mismatch(this.bytes(), that.bytes());
+	}
+
+	private static int mismatch(byte[] a, byte[] b) {
+		int length = Math.min(a.length, b.length);
+		for (int i = 0; i < length; i++) {
+			if (a[i] != b[i]) {
+				return i;
+			}
+		}
+		return a.length == b.length ? -1 : length;
 	}
 
 	/**

@@ -16,6 +16,7 @@
 
 package net.sandius.rembulan;
 
+import net.sandius.rembulan.util.ArrayByteIterator;
 import net.sandius.rembulan.util.ByteIterator;
 import net.sandius.rembulan.util.CharsetEncoderByteIterator;
 
@@ -36,6 +37,9 @@ class StringByteString extends ByteString {
 
 	private int byteHashCode;
 	private int byteLength;
+
+	// the encoded bytes, once something needed them; must not escape
+	private volatile byte[] bytes;
 
 	StringByteString(String s, Charset charset) {
 		this.string = Objects.requireNonNull(s);
@@ -61,28 +65,14 @@ class StringByteString extends ByteString {
 		int thatLength = that.maybeLength();
 		if (thisLength >= 0 && thatLength >= 0 && thisLength != thatLength) return false;
 
-		// compare byte-by-byte
-		ByteIterator thisIterator = this.byteIterator();
-		ByteIterator thatIterator = that.byteIterator();
-		while (thisIterator.hasNext() && thatIterator.hasNext()) {
-			byte thisByte = thisIterator.nextByte();
-			byte thatByte = thatIterator.nextByte();
-			if (thisByte != thatByte) {
-				return false;
-			}
-		}
-
-		return thisIterator.hasNext() == thatIterator.hasNext();
+		return Arrays.equals(this.bytes(), that.bytes());
 	}
 
 	private int computeHashCode() {
 		int hc = 0;
-
-		ByteIterator it = new CharsetEncoderByteIterator(string, charset);
-		while (it.hasNext()) {
-			hc = (hc * 31) + (it.nextByte() & 0xff);
+		for (byte b : bytes()) {
+			hc = (hc * 31) + (b & 0xff);
 		}
-
 		return hc;
 	}
 
@@ -105,21 +95,11 @@ class StringByteString extends ByteString {
 		return byteHashCode;
 	}
 
-	private int computeLength() {
-		int len = 0;
-		ByteIterator it = new CharsetEncoderByteIterator(string, charset);
-		while (it.hasNext()) {
-			it.nextByte();
-			len++;
-		}
-		return len;
-	}
-
 	@Override
 	public int length() {
 		int len = byteLength;
 		if (len < 0) {
-			len = computeLength();
+			len = bytes().length;
 			byteLength = len;
 		}
 		return len;
@@ -141,15 +121,22 @@ class StringByteString extends ByteString {
 		return string.isEmpty();
 	}
 
-	// must not escape, may be an array from the cache!
-	private byte[] toBytes() {
-		// TODO: cache the result
-		return string.getBytes(charset);
+	// must not escape: it is the cached array
+	@Override
+	byte[] bytes() {
+		byte[] b = bytes;
+		if (b == null) {
+			// encoded once, as String.getBytes does, which is much faster than an iterator
+			b = string.getBytes(charset);
+			bytes = b;
+			byteLength = b.length;
+		}
+		return b;
 	}
 
 	@Override
 	public byte[] getBytes() {
-		byte[] bytes = toBytes();
+		byte[] bytes = bytes();
 
 		// must make a defensive copy
 		return Arrays.copyOf(bytes, bytes.length);
@@ -162,12 +149,13 @@ class StringByteString extends ByteString {
 			throw new IndexOutOfBoundsException(String.valueOf(index));
 		}
 
-		return toBytes()[index];
+		return bytes()[index];
 	}
 
 	@Override
 	public ByteIterator byteIterator() {
-		return new CharsetEncoderByteIterator(string, charset);
+		byte[] b = bytes;
+		return b != null ? new ArrayByteIterator(b) : new CharsetEncoderByteIterator(string, charset);
 	}
 
 	private static void checkSubstringBounds(int start, int end, int len) {
@@ -179,7 +167,7 @@ class StringByteString extends ByteString {
 
 	@Override
 	public ByteString substring(int start, int end) {
-		byte[] bytes = toBytes();
+		byte[] bytes = bytes();
 		checkSubstringBounds(start, end, bytes.length);
 		return new ArrayByteString(Arrays.copyOfRange(bytes, start, end));
 	}
@@ -201,7 +189,7 @@ class StringByteString extends ByteString {
 
 	@Override
 	public String toRawString() {
-		byte[] bytes = toBytes();
+		byte[] bytes = bytes();
 		char[] chars = new char[bytes.length];
 		for (int i = 0; i < chars.length; i++) {
 			chars[i] = (char) (bytes[i] & 0xff);
@@ -212,7 +200,7 @@ class StringByteString extends ByteString {
 	@Override
 	public void putTo(ByteBuffer buffer) {
 		// ByteBuffer cannot be directly extended: it's safe to use a possibly cached array
-		buffer.put(toBytes());
+		buffer.put(bytes());
 	}
 
 	@Override

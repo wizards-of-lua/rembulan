@@ -66,4 +66,62 @@ public class ByteStringTest {
     assertThat(ByteString.of("ä", StandardCharsets.UTF_8).repeat(2, ByteString.of("|")).length())
         .isEqualTo(5);
   }
+
+  private static String chars(char c, int n) {
+    return new String(new char[n]).replace('\0', c);
+  }
+
+  @Test(timeout = 5000)
+  public void test_byteAt_of_a_string_made_from_chars_is_quick() {
+    // it encoded the whole string for every byte: 200,000 bytes took minutes
+    ByteString s = ByteString.of(chars('a', 200000));
+    long sum = 0;
+    for (int i = 0; i < s.length(); i++) {
+      sum += s.byteAt(i);
+    }
+    assertThat(sum).isEqualTo(97L * 200000);
+  }
+
+  @Test(timeout = 5000)
+  public void test_equals_of_array_and_chars_is_quick() {
+    // the array side read the other one with byteAt, which encoded it for every byte
+    ByteString chars = ByteString.of(chars('a', 200000));
+    ByteString array = bytes(chars('a', 200000));
+    assertThat(array.equals(chars)).isTrue();
+    assertThat(chars.equals(array)).isTrue();
+    assertThat(array.hashCode()).isEqualTo(chars.hashCode());
+  }
+
+  @Test
+  public void test_mismatch() {
+    assertThat(bytes("abc").mismatch(bytes("abc"))).isEqualTo(-1);
+    assertThat(bytes("abc").mismatch(bytes("abd"))).isEqualTo(2);
+    assertThat(bytes("abc").mismatch(bytes("ab"))).isEqualTo(2);
+    assertThat(bytes("ab").mismatch(bytes("abc"))).isEqualTo(2);
+    assertThat(bytes("").mismatch(bytes(""))).isEqualTo(-1);
+    assertThat(bytes("").mismatch(bytes("a"))).isEqualTo(0);
+    assertThat(bytes("xbc").mismatch(ByteString.of("abc"))).isEqualTo(0);
+    assertThat(ByteString.of("ä", StandardCharsets.UTF_8)
+        .mismatch(ByteString.copyOf(new byte[] {(byte) 0xc3, (byte) 0xa5}))).isEqualTo(1);
+  }
+
+  @Test
+  public void test_compareTo_and_equals_of_both_kinds() {
+    String[] values = {"", "a", "ab", "abc", "abd", "b", "\u00e4", "\u00e4b", "z"};
+    for (String x : values) {
+      for (String y : values) {
+        ByteString[] xs = {bytes(x), ByteString.of(x, StandardCharsets.ISO_8859_1)};
+        ByteString[] ys = {bytes(y), ByteString.of(y, StandardCharsets.ISO_8859_1)};
+        int expected = Integer.signum(x.compareTo(y));
+        for (ByteString a : xs) {
+          for (ByteString b : ys) {
+            assertThat(Integer.signum(a.compareTo(b))).as(x + " <> " + y).isEqualTo(expected);
+            assertThat(a.equals(b)).as(x + " == " + y).isEqualTo(x.equals(y));
+          }
+        }
+      }
+    }
+    // bytes above 0x7f are unsigned
+    assertThat(bytes("\u00e4").compareTo(bytes("a"))).isPositive();
+  }
 }

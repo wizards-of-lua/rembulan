@@ -43,14 +43,20 @@ class ArrayByteString extends ByteString {
 
 	@Override
 	protected boolean equals(ByteString that) {
-		if (this.length() != that.length()) return false;
+		// don't force the other's hashCode or length computation, but use them if already known
+		int thatLength = that.maybeLength();
+		if (thatLength >= 0 && thatLength != bytes.length) return false;
+		int thisHash = hashCode;
+		int thatHash = that.maybeHashCode();
+		if (thisHash != 0 && thatHash != 0 && thisHash != thatHash) return false;
 
-		int len = this.length();
-		for (int i = 0; i < len; i++) {
-			if (this.byteAt(i) != that.byteAt(i)) return false;
-		}
+		return Arrays.equals(bytes, that.bytes());
+	}
 
-		return true;
+	// must not escape
+	@Override
+	byte[] bytes() {
+		return bytes;
 	}
 
 	@Override

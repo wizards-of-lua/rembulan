@@ -346,7 +346,7 @@ public abstract class Ordering<T> implements Comparator<T> {
 
 		@Override
 		public boolean eq(ByteString a, ByteString b) {
-			return a.compareTo(b) == 0;
+			return a.equals(b);
 		}
 
 		@Override
