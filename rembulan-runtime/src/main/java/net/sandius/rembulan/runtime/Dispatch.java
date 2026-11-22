@@ -408,6 +408,23 @@ public final class Dispatch {
 		}
 	}
 
+	// a string is turned into a number in Java (decoded, trimmed, parsed): charged by its length
+	private static void chargeCoercion(ExecutionContext context, Object o) {
+		if (o instanceof ByteString) {
+			WorkMeter.charge(context, (long) ((ByteString) o).lengthEstimate() * WorkMeter.NUMBER_BYTE);
+		}
+	}
+
+	private static Number arithmeticValueOf(ExecutionContext context, Object o) {
+		chargeCoercion(context, o);
+		return Conversions.arithmeticValueOf(o);
+	}
+
+	private static Long integerValueOf(ExecutionContext context, Object o) {
+		chargeCoercion(context, o);
+		return Conversions.integerValueOf(o);
+	}
+
 	private static void try_mt_arithmetic(ExecutionContext context, ByteString event, Object a, Object b) throws UnresolvedControlThrowable {
 		Object handler = Metatables.binaryHandlerFor(context, event, a, b);
 
@@ -449,8 +466,8 @@ public final class Dispatch {
 	 */
 	@SuppressWarnings("unused")
 	public static void add(ExecutionContext context, Object a, Object b) throws UnresolvedControlThrowable {
-		Number na = Conversions.arithmeticValueOf(a);
-		Number nb = Conversions.arithmeticValueOf(b);
+		Number na = arithmeticValueOf(context, a);
+		Number nb = arithmeticValueOf(context, b);
 		Arithmetic math = Arithmetic.of(na, nb);
 
 		if (math != null) {
@@ -498,8 +515,8 @@ public final class Dispatch {
 	 */
 	@SuppressWarnings("unused")
 	public static void sub(ExecutionContext context, Object a, Object b) throws UnresolvedControlThrowable {
-		Number na = Conversions.arithmeticValueOf(a);
-		Number nb = Conversions.arithmeticValueOf(b);
+		Number na = arithmeticValueOf(context, a);
+		Number nb = arithmeticValueOf(context, b);
 		Arithmetic m = Arithmetic.of(na, nb);
 		if (m != null) {
 			context.getReturnBuffer().setTo(m.sub(na, nb));
@@ -546,8 +563,8 @@ public final class Dispatch {
 	 */
 	@SuppressWarnings("unused")
 	public static void mul(ExecutionContext context, Object a, Object b) throws UnresolvedControlThrowable {
-		Number na = Conversions.arithmeticValueOf(a);
-		Number nb = Conversions.arithmeticValueOf(b);
+		Number na = arithmeticValueOf(context, a);
+		Number nb = arithmeticValueOf(context, b);
 		Arithmetic m = Arithmetic.of(na, nb);
 		if (m != null) {
 			context.getReturnBuffer().setTo(m.mul(na, nb));
@@ -594,8 +611,8 @@ public final class Dispatch {
 	 */
 	@SuppressWarnings("unused")
 	public static void div(ExecutionContext context, Object a, Object b) throws UnresolvedControlThrowable {
-		Number na = Conversions.arithmeticValueOf(a);
-		Number nb = Conversions.arithmeticValueOf(b);
+		Number na = arithmeticValueOf(context, a);
+		Number nb = arithmeticValueOf(context, b);
 		Arithmetic m = Arithmetic.of(na, nb);
 		if (m != null) {
 			context.getReturnBuffer().setTo(m.div(na, nb));
@@ -642,8 +659,8 @@ public final class Dispatch {
 	 */
 	@SuppressWarnings("unused")
 	public static void mod(ExecutionContext context, Object a, Object b) throws UnresolvedControlThrowable {
-		Number na = Conversions.arithmeticValueOf(a);
-		Number nb = Conversions.arithmeticValueOf(b);
+		Number na = arithmeticValueOf(context, a);
+		Number nb = arithmeticValueOf(context, b);
 		Arithmetic m = Arithmetic.of(na, nb);
 		if (m != null) {
 			context.getReturnBuffer().setTo(m.mod(na, nb));
@@ -690,8 +707,8 @@ public final class Dispatch {
 	 */
 	@SuppressWarnings("unused")
 	public static void idiv(ExecutionContext context, Object a, Object b) throws UnresolvedControlThrowable {
-		Number na = Conversions.arithmeticValueOf(a);
-		Number nb = Conversions.arithmeticValueOf(b);
+		Number na = arithmeticValueOf(context, a);
+		Number nb = arithmeticValueOf(context, b);
 		Arithmetic m = Arithmetic.of(na, nb);
 		if (m != null) {
 			context.getReturnBuffer().setTo(m.idiv(na, nb));
@@ -738,8 +755,8 @@ public final class Dispatch {
 	 */
 	@SuppressWarnings("unused")
 	public static void pow(ExecutionContext context, Object a, Object b) throws UnresolvedControlThrowable {
-		Number na = Conversions.arithmeticValueOf(a);
-		Number nb = Conversions.arithmeticValueOf(b);
+		Number na = arithmeticValueOf(context, a);
+		Number nb = arithmeticValueOf(context, b);
 		Arithmetic m = Arithmetic.of(na, nb);
 		if (m != null) {
 			context.getReturnBuffer().setTo(m.pow(na, nb));
@@ -808,8 +825,8 @@ public final class Dispatch {
 	 */
 	@SuppressWarnings("unused")
 	public static void band(ExecutionContext context, Object a, Object b) throws UnresolvedControlThrowable {
-		Long la = Conversions.integerValueOf(a);
-		Long lb = Conversions.integerValueOf(b);
+		Long la = integerValueOf(context, a);
+		Long lb = integerValueOf(context, b);
 
 		if (la != null && lb != null) {
 			context.getReturnBuffer().setTo(LuaMathOperators.band(la, lb));
@@ -838,8 +855,8 @@ public final class Dispatch {
 	 */
 	@SuppressWarnings("unused")
 	public static void bor(ExecutionContext context, Object a, Object b) throws UnresolvedControlThrowable {
-		Long la = Conversions.integerValueOf(a);
-		Long lb = Conversions.integerValueOf(b);
+		Long la = integerValueOf(context, a);
+		Long lb = integerValueOf(context, b);
 
 		if (la != null && lb != null) {
 			context.getReturnBuffer().setTo(LuaMathOperators.bor(la, lb));
@@ -868,8 +885,8 @@ public final class Dispatch {
 	 */
 	@SuppressWarnings("unused")
 	public static void bxor(ExecutionContext context, Object a, Object b) throws UnresolvedControlThrowable {
-		Long la = Conversions.integerValueOf(a);
-		Long lb = Conversions.integerValueOf(b);
+		Long la = integerValueOf(context, a);
+		Long lb = integerValueOf(context, b);
 
 		if (la != null && lb != null) {
 			context.getReturnBuffer().setTo(LuaMathOperators.bxor(la, lb));
@@ -898,8 +915,8 @@ public final class Dispatch {
 	 */
 	@SuppressWarnings("unused")
 	public static void shl(ExecutionContext context, Object a, Object b) throws UnresolvedControlThrowable {
-		Long la = Conversions.integerValueOf(a);
-		Long lb = Conversions.integerValueOf(b);
+		Long la = integerValueOf(context, a);
+		Long lb = integerValueOf(context, b);
 
 		if (la != null && lb != null) {
 			context.getReturnBuffer().setTo(LuaMathOperators.shl(la, lb));
@@ -928,8 +945,8 @@ public final class Dispatch {
 	 */
 	@SuppressWarnings("unused")
 	public static void shr(ExecutionContext context, Object a, Object b) throws UnresolvedControlThrowable {
-		Long la = Conversions.integerValueOf(a);
-		Long lb = Conversions.integerValueOf(b);
+		Long la = integerValueOf(context, a);
+		Long lb = integerValueOf(context, b);
 
 		if (la != null && lb != null) {
 			context.getReturnBuffer().setTo(LuaMathOperators.shr(la, lb));
@@ -956,7 +973,7 @@ public final class Dispatch {
 	 */
 	@SuppressWarnings("unused")
 	public static void unm(ExecutionContext context, Object o) throws UnresolvedControlThrowable {
-		Number no = Conversions.arithmeticValueOf(o);
+		Number no = arithmeticValueOf(context, o);
 		Arithmetic m = Arithmetic.of(no);
 		if (m != null) {
 			context.getReturnBuffer().setTo(m.unm(no));
@@ -999,7 +1016,7 @@ public final class Dispatch {
 	 */
 	@SuppressWarnings("unused")
 	public static void bnot(ExecutionContext context, Object o) throws UnresolvedControlThrowable {
-		Long lo = Conversions.integerValueOf(o);
+		Long lo = integerValueOf(context, o);
 
 		if (lo != null) {
 			context.getReturnBuffer().setTo(LuaMathOperators.bnot(lo));
@@ -1144,7 +1161,10 @@ public final class Dispatch {
 	}
 
 	private static void eq(ExecutionContext context, boolean polarity, Object a, Object b) throws UnresolvedControlThrowable {
-		boolean rawEqual = Ordering.isRawEqual(a, b);
+		// two strings are charged the bytes compared
+		boolean rawEqual = a instanceof ByteString && b instanceof ByteString
+				? WorkMeter.equal(context, (ByteString) a, (ByteString) b)
+				: Ordering.isRawEqual(a, b);
 
 		if (!rawEqual
 				&& ((a instanceof Table && b instanceof Table)
@@ -1238,6 +1258,13 @@ public final class Dispatch {
 	 */
 	@SuppressWarnings("unused")
 	public static void lt(ExecutionContext context, Object a, Object b) throws UnresolvedControlThrowable {
+		if (a instanceof ByteString && b instanceof ByteString) {
+			// charged the bytes compared
+			int cmp = WorkMeter.compare(context, (ByteString) a, (ByteString) b);
+			context.getReturnBuffer().setTo(cmp < 0);
+			return;
+		}
+
 		Ordering<Object> c = Ordering.of(a, b);
 		if (c != null) {
 			boolean result = c.lt(a, b);
@@ -1311,6 +1338,13 @@ public final class Dispatch {
 	 */
 	@SuppressWarnings("unused")
 	public static void le(ExecutionContext context, Object a, Object b) throws UnresolvedControlThrowable {
+		if (a instanceof ByteString && b instanceof ByteString) {
+			// charged the bytes compared
+			int cmp = WorkMeter.compare(context, (ByteString) a, (ByteString) b);
+			context.getReturnBuffer().setTo(cmp <= 0);
+			return;
+		}
+
 		Ordering<Object> c = Ordering.of(a, b);
 		if (c != null) {
 			boolean result = c.le(a, b);

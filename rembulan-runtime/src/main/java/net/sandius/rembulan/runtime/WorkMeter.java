@@ -64,7 +64,10 @@ public final class WorkMeter {
 	 */
 	public static final int TABLE_MOVE = 300;
 
-	/** A byte compared by a raw sort of strings (400 per tick). */
+	/**
+	 * A byte compared, by the comparison operators, {@code ==} and a raw sort of strings
+	 * (400 per tick).
+	 */
 	public static final int COMPARE_BYTE = 3;
 
 	/**
@@ -77,8 +80,9 @@ public final class WorkMeter {
 	public static final int UTF8_BYTE = 9;
 
 	/**
-	 * A byte of a string turned into a number by tonumber: decoded, trimmed, parsed, and copied
-	 * into the message of a failed parse (66 per tick).
+	 * A byte of a string turned into a number, by tonumber or the coercion of an arithmetic
+	 * operand: decoded, trimmed, parsed, and copied into the message of a failed parse
+	 * (66 per tick).
 	 */
 	public static final int NUMBER_BYTE = 18;
 
@@ -175,6 +179,38 @@ public final class WorkMeter {
 			context.registerTicks(0);
 			context.registerTicksUnpausable((int) Math.min(ticks, Integer.MAX_VALUE));
 		}
+	}
+
+	/**
+	 * Compares two byte strings like {@link ByteString#compareTo(ByteString)}, and charges the
+	 * bytes compared afterwards.
+	 *
+	 * @param context  the context to charge, must not be {@code null}
+	 */
+	public static int compare(ExecutionContext context, ByteString a, ByteString b) {
+		if (a == b) {
+			return 0;
+		}
+		int index = a.mismatch(b);
+		charge(context, (long) (index < 0 ? a.length() : index) * COMPARE_BYTE);
+		return compareAt(a, b, index);
+	}
+
+	/**
+	 * Tells whether two byte strings are equal, and charges the bytes compared afterwards.
+	 *
+	 * @param context  the context to charge, must not be {@code null}
+	 */
+	public static boolean equal(ExecutionContext context, ByteString a, ByteString b) {
+		if (a == b) {
+			return true;
+		}
+		if (a.length() != b.length()) {
+			return false;
+		}
+		int index = a.mismatch(b);
+		charge(context, (long) (index < 0 ? a.length() : index) * COMPARE_BYTE);
+		return index < 0;
 	}
 
 	/**

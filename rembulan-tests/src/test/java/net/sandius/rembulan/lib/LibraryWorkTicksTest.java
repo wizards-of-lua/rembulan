@@ -409,7 +409,8 @@ public class LibraryWorkTicksTest extends TestBase {
         "string.find(s, 'b', 1, true)",
         "string.find(s, '^b')", "string.match(s, '^b')", "string.gmatch(s, 'b')",
         "string.gsub(s, '^b', '')", "string.find('a', s)", "string.gsub('a', 'a', s)",
-        "tonumber(s)", "tonumber(s, 16)",
+        "tonumber(s)", "tonumber(s, 16)", "s + 1", "s | 1",
+        "s < t", "s <= t", "s == t", "s ~= t",
         "utf8.len(s)", "utf8.offset(s, 1000000)", "utf8.codepoint(s, 1, 100000)",
     };
     for (String call : calls) {
@@ -438,6 +439,27 @@ public class LibraryWorkTicksTest extends TestBase {
     assertThat(unpausable("string.sub(..., 2)", (int) n)).isEqualTo(ticks((n - 1) * WorkMeter.BYTE));
     assertThat(unpausable("string.byte(..., 1, 100000)", (int) n)).isEqualTo(ticks(100000L * WorkMeter.VALUE));
     assertThat(unpausable("tonumber(...)", (int) n)).isEqualTo(ticks(n * WorkMeter.NUMBER_BYTE));
+    // both operands compared to the end
+    assertThat(unpausable("local s, t = ... return s == t, s < t, s <= t", (int) n, (int) n))
+        .isEqualTo(3 * ticks(n * WorkMeter.COMPARE_BYTE));
+  }
+
+  @Test
+  public void test_comparisons_charge_only_the_bytes_compared() throws Exception {
+    // strings of different lengths are never equal; a comparison stops at the first difference
+    assertThat(unpausable("local s, t = ... return s == t, s ~= t", MB, MB - 1)).isEqualTo(0);
+    assertThat(unpausable("local s = ... return s < 'b', s <= 'b', 'b' < s", MB)).isEqualTo(0);
+    assertThat(unpausable("local s = ... return s < s, s == s", MB)).isEqualTo(0);
+  }
+
+  @Test
+  public void test_comparison_results_are_unchanged() throws Exception {
+    Object[] actual = run(new Scheduler(Long.MAX_VALUE),
+        "local s, t = ... local u = s .. 'b'\n"
+            + "return s == t, s < t, s <= t, s < u, u < s, u <= s, s ~= u, 'a\\200' > 'a\\127',"
+            + " ('x'):rep(3) == 'xxx', '' < 'a', 'b' <= 'a'", 5000, 5000);
+    assertThat(actual).isEqualTo(new Object[] {
+        true, false, true, true, false, false, true, true, true, true, false});
   }
 
   @Test(timeout = 10000)
