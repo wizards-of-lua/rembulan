@@ -38,21 +38,25 @@ There are also a few short texts in the `doc` folder:
 
 To build Rembulan, you will need the following:
 
- * Java Development Kit (JDK) version 8 or higher
- * Gradle version 8.10 or higher
+ * a Java Development Kit (JDK) version 17 or higher to run Gradle (JDK 25 works)
+ * a JDK 8: the code is compiled for Java 8 with a Gradle toolchain, and Gradle
+   finds an installed JDK 8 on its own
 
-Gradle will pull in the remaining dependencies as part of the build process.
+You don't need to install Gradle: the Gradle wrapper (`gradlew`) downloads the right version
+(9.5.0). Gradle will pull in the remaining dependencies as part of the build process.
 
 To fetch the latest code on the `master` branch and build it, run
 
 ```sh
 git clone https://github.com/wizards-of-lua/rembulan.git
-cd rembulan    
-gradlew clean build publishToMavenLocal
+cd rembulan
+./gradlew clean build publishToMavenLocal
 ```
 
+(On Windows, use `gradlew.bat` instead of `./gradlew`.)
+
 This will build all modules, run tests and finally install all artifacts into your local
-Maven repository.    
+Maven repository.
 
 ### Using Rembulan from Gradle
 
@@ -73,7 +77,7 @@ repositories {
 }
 
 dependencies {
-    implementation 'net.wizardsoflua.rembulan:rembulan-runtime:0.5.1'
+    implementation 'net.wizardsoflua.rembulan:rembulan-runtime:0.5.4'
 }
 ```
 
@@ -81,7 +85,7 @@ To include the **compiler** as a dependency:
 
 ```groovy
 dependencies {
-    implementation 'net.wizardsoflua.rembulan:rembulan-compiler:0.5.1'
+    implementation 'net.wizardsoflua.rembulan:rembulan-compiler:0.5.4'
 }
 ```
 
@@ -89,7 +93,7 @@ To include the **standard library** as a dependency:
 
 ```groovy
 dependencies {
-    implementation 'net.wizardsoflua.rembulan:rembulan-stdlib:0.5.1'
+    implementation 'net.wizardsoflua.rembulan:rembulan-stdlib:0.5.4'
 }
 ```
 
@@ -174,6 +178,13 @@ n = 199999
 The [`CallPausedException`](https://mjanicek.github.io/rembulan/apidocs/rembulan-runtime/net/sandius/rembulan/exec/CallPausedException.html) contains a *continuation* of the call. The call can be resumed:
 the pause is transparent to the Lua code, and the loop does not end with an error (it is merely
 paused).
+
+Library functions implemented in Java count their work too: long-running calls such as pattern
+matching (`string.find`, `gsub`, ...), building long strings (`string.rep`, `table.concat`, `..`),
+`table.sort`, `table.move` and file io register ticks while they work, through
+`ExecutionContext.registerTicksUnpausable`. Such work can't be paused in the middle of the call,
+but a scheduler can stop it by throwing from `SchedulingContext.registerTicksUnpausable`, e.g. a
+`LuaRuntimeException`, which the Lua code sees as an error.
 
 #### Further examples
 
