@@ -18,6 +18,7 @@ import net.sandius.rembulan.exec.DirectCallExecutor;
 import net.sandius.rembulan.impl.StateContexts;
 import net.sandius.rembulan.runtime.LuaFunction;
 import net.sandius.rembulan.runtime.SchedulingContext;
+import net.sandius.rembulan.runtime.WorkMeter;
 import net.sandius.rembulan.testenv.TestBase;
 
 /**
@@ -119,12 +120,13 @@ public class LibraryWorkTicksTest extends TestBase {
   @Test
   public void test_each_call_is_charged_on_its_own() throws Exception {
     // two calls of 30,000 ticks each in one piece of compiled code (no branch between them, so no
-    // ordinary registerTicks): each call starts its count anew, so neither exceeds 50,000
+    // ordinary registerTicks): each call starts its count anew, so neither exceeds 50,000; each
+    // also charges 1500 ticks for making a raw string of its subject
     Scheduler scheduler = new Scheduler(50000);
     Object[] actual = run(scheduler, "local s = ... local a = s:find('b') local b = s:find('b') return a, b",
         300000);
     assertThat(actual).isEqualTo(new Object[] {null, null});
-    assertThat(scheduler.unpausableTicks).isBetween(59900L, 60000L);
+    assertThat(scheduler.unpausableTicks).isBetween(62900L, 63000L);
   }
 
   @Test
@@ -148,10 +150,10 @@ public class LibraryWorkTicksTest extends TestBase {
   @Test
   public void test_long_find_charges_its_steps() throws Exception {
     Scheduler scheduler = new Scheduler(Long.MAX_VALUE);
-    // 100,000 start positions of 2 steps each, 20 steps per tick
+    // 100,000 start positions of 2 steps each, 20 steps per tick; 500 ticks for the raw string
     Object[] actual = run(scheduler, "return string.find(..., 'b')", 100000);
     assertThat(actual).isEqualTo(new Object[] {null});
-    assertThat(scheduler.unpausableTicks).isBetween(9950L, 10000L);
+    assertThat(scheduler.unpausableTicks).isBetween(10450L, 10500L);
   }
 
   @Test
@@ -159,8 +161,11 @@ public class LibraryWorkTicksTest extends TestBase {
     Scheduler scheduler = new Scheduler(Long.MAX_VALUE);
     Object[] actual = run(scheduler, "local s, n = string.gsub(..., 'a', 'x') return #s, n", 100000);
     assertThat(actual).isEqualTo(new Object[] {100000L, 100000L});
-    // per match: 2 steps for the position, 1 for the item, 6 for the result; an append of 1 byte
-    assertThat(scheduler.unpausableTicks).isBetween(53000L, 54000L);
+    // per match: 2 steps for the position, 1 for the item, 6 for the result, the replacement
+    // scanned, an append of 1 byte; the raw string before, and the result made bytes after
+    long perMatch = 9 * WorkMeter.PATTERN_STEP + WorkMeter.CONVERT_BYTE + WorkMeter.APPEND + WorkMeter.BYTE;
+    long expected = ticks(100000L * perMatch) + 2 * ticks(100000L * WorkMeter.CONVERT_BYTE);
+    assertThat(scheduler.unpausableTicks).isBetween(expected - 100, expected);
   }
 
   @Test
@@ -195,8 +200,8 @@ public class LibraryWorkTicksTest extends TestBase {
     Scheduler scheduler = new Scheduler(Long.MAX_VALUE);
     Object[] actual = run(scheduler, "return #string.rep(..., 1000)", 1000);
     assertThat(actual).isEqualTo(new Object[] {1000000L});
-    // 1,000,000 bytes, 400 per tick, charged at once before the work
-    assertThat(scheduler.unpausableTicks).isEqualTo(2500L);
+    // 1,000,000 bytes, charged at once before the work
+    assertThat(scheduler.unpausableTicks).isEqualTo(ticks(1000000L * WorkMeter.BYTE));
   }
 
   @Test(timeout = 10000)
@@ -261,8 +266,10 @@ public class LibraryWorkTicksTest extends TestBase {
         "local t = {} for i = 1, 10000 do t[i] = (i * 7919) % 10007 end\n"
             + "table.sort(t) return t[1], t[10000]");
     assertThat(actual).isEqualTo(new Object[] {1L, 10006L});
-    // about 2 n log2(n) sift steps, one tick each
-    assertThat(scheduler.unpausableTicks).isBetween(100000L, 300000L);
+    // about n log2(n) sift steps
+    long steps = 10000 * 13;
+    assertThat(scheduler.unpausableTicks)
+        .isBetween(ticks(steps / 2 * WorkMeter.SORT_STEP_NUMBERS), ticks(steps * 2 * WorkMeter.SORT_STEP_NUMBERS));
   }
 
   @Test(timeout = 10000)
@@ -276,7 +283,7 @@ public class LibraryWorkTicksTest extends TestBase {
 
   @Test
   public void test_concat_operator_is_stopped() throws Exception {
-    // 2,000,000 bytes: 5000 ticks, charged before the copy
+    // 2,000,000 bytes: 3333 ticks, charged before the copy
     Object[] actual = run(new Scheduler(1000),
         "local a = ... return pcall(function() return a .. a end)", 1000000);
     assertThat(actual).isEqualTo(new Object[] {false, STOPPED});
@@ -287,7 +294,7 @@ public class LibraryWorkTicksTest extends TestBase {
     Scheduler scheduler = new Scheduler(Long.MAX_VALUE);
     Object[] actual = run(scheduler, "local a = ... return #(a .. a), #('x' .. 'y')", 200000);
     assertThat(actual).isEqualTo(new Object[] {400000L, 2L});
-    assertThat(scheduler.unpausableTicks).isEqualTo(1000L);
+    assertThat(scheduler.unpausableTicks).isEqualTo(ticks(400000L * WorkMeter.BYTE));
   }
 
   // --- table.move, table.insert, table.remove
@@ -377,6 +384,135 @@ public class LibraryWorkTicksTest extends TestBase {
     assertThat(actual).isEqualTo(new Object[] {false, STOPPED, 0L});
   }
 
+  // --- 0.5.5: functions and operators that convert, copy or compare their input
+
+  private static final int MB = 1000000;
+
+  private static long ticks(long units) {
+    return units / WorkMeter.UNITS_PER_TICK;
+  }
+
+  /** The unpausable ticks the program registers, with a scheduler that never stops it. */
+  private long unpausable(String program, int... n) throws Exception {
+    Scheduler scheduler = new Scheduler(Long.MAX_VALUE);
+    run(scheduler, program, n);
+    return scheduler.unpausableTicks;
+  }
+
+  @Test(timeout = 20000)
+  public void test_calls_on_a_long_string_are_stopped() throws Exception {
+    // s and t are two strings of a million bytes; each call is charged several thousand ticks
+    String[] calls = {
+        "string.upper(s)", "string.lower(s)", "string.reverse(s)", "string.sub(s, 1, -1)",
+        "string.byte(s, 1, 100000)",
+        "string.format('%s', s)", "string.format('%q', s)", "string.format(s)",
+        "string.find(s, 'b', 1, true)",
+        "string.find(s, '^b')", "string.match(s, '^b')", "string.gmatch(s, 'b')",
+        "string.gsub(s, '^b', '')", "string.find('a', s)", "string.gsub('a', 'a', s)",
+        "tonumber(s)", "tonumber(s, 16)",
+        "utf8.len(s)", "utf8.offset(s, 1000000)", "utf8.codepoint(s, 1, 100000)",
+    };
+    for (String call : calls) {
+      Object[] actual = run(new Scheduler(1000),
+          "local s, t = ... return pcall(function() return " + call + " end)", MB, MB);
+      assertThat(actual).as(call).isEqualTo(new Object[] {false, STOPPED});
+    }
+  }
+
+  @Test
+  public void test_calls_on_short_strings_charge_nothing() throws Exception {
+    long ticks = unpausable("local s, t = ...\n"
+        + "local r = {s:upper(), s:lower(), s:reverse(), s:sub(2, 5), s:byte(1, -1),"
+        + " ('%s %q'):format(s, s), s:find('a', 1, true), s:find('a'), s:match('a+'),"
+        + " tonumber('12'), tonumber('ff', 16), '1' + 1, s < t, s == t, s <= t,"
+        + " select(2, 1, 2, 3), math.max(1, 2, 3), utf8.len(s), utf8.codepoint(s, 1, -1)}\n"
+        + "return #r", 50, 50);
+    assertThat(ticks).isEqualTo(0);
+  }
+
+  @Test
+  public void test_string_functions_charge_their_bytes() throws Exception {
+    long n = 600000;
+    assertThat(unpausable("string.upper(...)", (int) n)).isEqualTo(ticks(n * WorkMeter.CONVERT_BYTE));
+    assertThat(unpausable("string.reverse(...)", (int) n)).isEqualTo(ticks(n * WorkMeter.CONVERT_BYTE));
+    assertThat(unpausable("string.sub(..., 2)", (int) n)).isEqualTo(ticks((n - 1) * WorkMeter.BYTE));
+    assertThat(unpausable("string.byte(..., 1, 100000)", (int) n)).isEqualTo(ticks(100000L * WorkMeter.VALUE));
+    assertThat(unpausable("tonumber(...)", (int) n)).isEqualTo(ticks(n * WorkMeter.NUMBER_BYTE));
+  }
+
+  @Test(timeout = 10000)
+  public void test_sort_of_strings_with_long_common_prefixes_is_stopped() throws Exception {
+    // about 20,000 comparisons of 10,000 bytes each
+    Object[] actual = run(new Scheduler(50000),
+        "local p = string.rep('x', 10000) local t = {}\n"
+            + "for i = 1, 1000 do t[i] = p .. ((i * 7919) % 1000) end\n"
+            + "return pcall(table.sort, t)");
+    assertThat(actual).isEqualTo(new Object[] {false, STOPPED});
+  }
+
+  @Test
+  public void test_sort_of_strings_results() throws Exception {
+    Object[] actual = run(new Scheduler(Long.MAX_VALUE),
+        "local p = string.rep('x', 100) local t = {}\n"
+            + "for i = 1, 300 do t[i] = p .. string.format('%03d', (i * 7) % 300) end\n"
+            + "table.sort(t) local ok = true\n"
+            + "for i = 1, 299 do ok = ok and t[i] < t[i + 1] end\n"
+            + "return ok, t[1]:sub(-3), t[300]:sub(-3)");
+    assertThat(actual).isEqualTo(new Object[] {true, "000", "299"});
+  }
+
+  private static final String MANY = "local t = {} for i = 1, 100000 do t[i] = i % 100 end\n";
+
+  @Test
+  public void test_calls_with_many_values_charge_them() throws Exception {
+    long unpack = ticks(100000L * WorkMeter.TABLE_ACCESS);
+    assertThat(unpausable(MANY + "return select('#', table.unpack(t))")).isEqualTo(unpack);
+    assertThat(unpausable(MANY + "return select(100000, table.unpack(t))"))
+        .isEqualTo(unpack + ticks(3L * 100001 * WorkMeter.ARGUMENT));
+    assertThat(unpausable(MANY + "return table.pack(table.unpack(t)).n"))
+        .isEqualTo(unpack + ticks(100000L * WorkMeter.TABLE_MOVE));
+    assertThat(unpausable(MANY + "return #string.char(table.unpack(t))"))
+        .isEqualTo(unpack + ticks(100000L * WorkMeter.NUMBER_ARGUMENT));
+    assertThat(unpausable(MANY + "return #utf8.char(table.unpack(t))"))
+        .isEqualTo(unpack + ticks(100000L * WorkMeter.NUMBER_ARGUMENT));
+    // a meter charges in pieces of 50 ticks
+    assertThat(unpausable(MANY + "return math.max(table.unpack(t))"))
+        .isBetween(unpack + ticks(99999L * WorkMeter.VALUE) - 50, unpack + ticks(99999L * WorkMeter.VALUE));
+  }
+
+  @Test(timeout = 10000)
+  public void test_unpack_is_stopped() throws Exception {
+    Object[] actual = run(new Scheduler(1000), MANY + "return pcall(table.unpack, t)");
+    assertThat(actual).isEqualTo(new Object[] {false, STOPPED});
+  }
+
+  @Test(timeout = 10000)
+  public void test_utf8_codes_over_continuation_bytes_is_stopped() throws Exception {
+    // called with a position, the iterator looks for the end of that character through a
+    // million continuation bytes (a for loop fails on the first step: invalid UTF-8 code)
+    Object[] actual = run(new Scheduler(3000),
+        "local s = 'a' .. string.rep('\\x80', 1000000)\n"
+            + "return pcall(utf8.codes(s), s, 1)");
+    assertThat(actual).isEqualTo(new Object[] {false, STOPPED});
+  }
+
+  @Test
+  public void test_string_results_are_unchanged() throws Exception {
+    // in a table constructor, each call but the last gives its first value only
+    Object[] actual = run(new Scheduler(Long.MAX_VALUE),
+        "local r = {('Hello, World'):upper(), ('Hello, World'):lower(), ('abc'):reverse(),"
+            + " ('hello'):sub(2, -2), ('hello'):byte(2, 3), ('hello'):find('l', 1, true),"
+            + " ('hello'):find('lo', -2, true), ('hello'):find('xyz', 1, true),"
+            + " ('hello'):find('', 3, true), ('abc'):find('', 4, true), ('aab'):find('ab', 1, true),"
+            + " string.format('%5s|%-3s|%.2s', 'ab', 'c', 'xyz'), tonumber(' 0x1F '),"
+            + " tonumber('z', 36), tonumber('12', 2), select(-1, 1, 2, 3), math.min(3, 1, 2),"
+            + " utf8.len('h\\u{e4}llo'), utf8.offset('h\\u{e4}llo', 3)}\n"
+            + "return table.unpack(r, 1, 19)");
+    assertThat(actual).isEqualTo(new Object[] {
+        "HELLO, WORLD", "hello, world", "cba", "ell", 101L, 3L, 4L, null, 3L, 4L, 2L,
+        "   ab|c  |xy", 31L, 35L, null, 3L, 1L, 5L, 4L});
+  }
+
   // --- schedulers without registerTicksUnpausable
 
   @Test
@@ -395,6 +531,6 @@ public class LibraryWorkTicksTest extends TestBase {
     };
     Object[] actual = run(plain, "return #string.rep(string.rep('x', 1000), 1000)");
     assertThat(actual).isEqualTo(new Object[] {1000000L});
-    assertThat(ticks[0]).isGreaterThan(2500L);
+    assertThat(ticks[0]).isGreaterThanOrEqualTo(ticks(1000000L * WorkMeter.BYTE));
   }
 }

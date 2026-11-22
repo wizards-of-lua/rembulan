@@ -891,6 +891,9 @@ public final class TableLib {
 		protected void invoke(ExecutionContext context, ArgumentIterator args) throws ResolvedControlThrowable {
 			Table table = context.newTable();
 
+			// charged before it is done
+			WorkMeter.charge(context, (long) args.size() * WorkMeter.TABLE_MOVE);
+
 			int n = 0;
 			while (args.hasNext()) {
 				table.rawset(n + 1, args.nextAny());
@@ -1525,6 +1528,14 @@ public final class TableLib {
 			t.rawset(b, va);
 		}
 
+		// strings are charged the bytes compared, besides the step
+		private static boolean rawLt(Ordering<Object> ordering, Object a, Object b, WorkMeter meter) {
+			if (a instanceof ByteString && b instanceof ByteString) {
+				return meter.compare((ByteString) a, (ByteString) b) < 0;
+			}
+			return ordering.lt(a, b);
+		}
+
 		private static void rawSiftDown(Table t, Ordering<Object> ordering, long start, long end, WorkMeter meter) {
 			long root = start;
 
@@ -1536,14 +1547,14 @@ public final class TableLib {
 				Object childValue = t.rawget(child);
 				if (child + 1 <= end) {
 					Object tmp = t.rawget(child + 1);
-					if (ordering.lt(childValue, tmp)) {
+					if (rawLt(ordering, childValue, tmp, meter)) {
 						// use the right child
 						child += 1;
 						childValue = tmp;
 					}
 				}
 
-				if (ordering.lt(rootValue, childValue)) {
+				if (rawLt(ordering, rootValue, childValue, meter)) {
 					swap(t, root, child, rootValue, childValue);
 					root = child;
 				}
@@ -1654,6 +1665,10 @@ public final class TableLib {
 						// j is known;
 
 						verifyNumberOfResults(i, j);
+						if (i <= j) {
+							// charged before it is done (at most MAX_RESULTS values)
+							WorkMeter.charge(context, (j - i + 1) * WorkMeter.TABLE_ACCESS);
+						}
 
 						// is this a clean table without __index?
 						if (obj instanceof Table && !TableUtil.hasIndexMetamethod((Table) obj)) {

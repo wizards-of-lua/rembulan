@@ -55,6 +55,7 @@ import net.sandius.rembulan.runtime.ProtectedResumable;
 import net.sandius.rembulan.runtime.ResolvedControlThrowable;
 import net.sandius.rembulan.runtime.ReturnBuffer;
 import net.sandius.rembulan.runtime.UnresolvedControlThrowable;
+import net.sandius.rembulan.runtime.WorkMeter;
 
 import java.io.IOException;
 import java.io.OutputStream;
@@ -1143,11 +1144,20 @@ public final class BasicLib {
 			return "tonumber";
 		}
 
+		// charges turning s into a number, before it is done
+		private static void chargeConversion(ExecutionContext context, ByteString s) {
+			WorkMeter.charge(context, (long) s.lengthEstimate() * WorkMeter.NUMBER_BYTE);
+		}
+
 		@Override
 		protected void invoke(ExecutionContext context, ArgumentIterator args) throws ResolvedControlThrowable {
 			if (args.size() < 2) {
 				// no base
 				Object o = args.nextAny();
+				if (o instanceof ByteString) {
+					// decoded, trimmed and parsed
+					chargeConversion(context, (ByteString) o);
+				}
 				Number n = Conversions.numericalValueOf(o);
 				context.getReturnBuffer().setTo(n);
 			}
@@ -1162,6 +1172,7 @@ public final class BasicLib {
 				ByteString s = args.nextStrictString();
 				int base = args.nextIntRange(Character.MIN_RADIX, Character.MAX_RADIX, "base");
 
+				chargeConversion(context, s);
 				context.getReturnBuffer().setTo(toNumber(s, base));
 
 			}
@@ -1548,6 +1559,8 @@ public final class BasicLib {
 					throw new BadArgumentException(1, name(), "index out of range");
 				}
 
+				// the arguments are copied twice, and once more into the return buffer
+				WorkMeter.charge(context, 3L * args.size() * WorkMeter.ARGUMENT);
 				Object[] r = args.copyAll();
 				final Object[] result;
 				result = from > r.length ? new Object[0] : Arrays.copyOfRange(r, from, r.length);

@@ -44,7 +44,6 @@
 package net.sandius.rembulan.lib;
 
 import net.sandius.rembulan.ByteString;
-import net.sandius.rembulan.ByteStringBuilder;
 import net.sandius.rembulan.Conversions;
 import net.sandius.rembulan.LuaFormat;
 import net.sandius.rembulan.LuaRuntimeException;
@@ -62,7 +61,6 @@ import net.sandius.rembulan.runtime.IllegalOperationAttemptException;
 import net.sandius.rembulan.runtime.LuaFunction;
 import net.sandius.rembulan.runtime.ResolvedControlThrowable;
 import net.sandius.rembulan.runtime.UnresolvedControlThrowable;
-import net.sandius.rembulan.util.ByteIterator;
 
 import java.math.BigDecimal;
 import java.math.MathContext;
@@ -713,25 +711,39 @@ public final class StringLib {
 		return result;
 	}
 
+	// Charges, before it is done, the work of a pattern function that its steps don't count:
+	// making raw strings of its arguments (rawBytes bytes) and parsing the pattern.
+	private static void chargePreparation(ExecutionContext context, long rawBytes, ByteString pattern) {
+		WorkMeter.charge(context, rawBytes * WorkMeter.CONVERT_BYTE
+				+ (long) pattern.lengthEstimate() * WorkMeter.PATTERN_CHAR);
+	}
+
+	// Charges, before it is done, converting a string of this length byte by byte.
+	private static void chargeConversion(ExecutionContext context, long length) {
+		WorkMeter.charge(context, length * WorkMeter.CONVERT_BYTE);
+	}
+
 	private static byte toLower(byte b) {
 		int c = b & 0xff;
 		// FIXME: dealing with ASCII only
 		return c >= 'A' && c <= 'Z' ? (byte) (c - (int) 'A' + (int) 'a') : b;
 	}
 
-	private static ByteString toLowerCase(ByteString s) {
-		boolean changed = false;
+	private static ByteString toLowerCase(ExecutionContext context, ByteString s) {
+		chargeConversion(context, s.lengthEstimate());
 
-		ByteStringBuilder bld = new ByteStringBuilder();
-		ByteIterator it = s.byteIterator();
-		while (it.hasNext()) {
-			byte b = it.nextByte();
+		byte[] bytes = s.getBytes();
+		boolean changed = false;
+		for (int i = 0; i < bytes.length; i++) {
+			byte b = bytes[i];
 			byte c = toLower(b);
-			changed |= b != c;
-			bld.append(c);
+			if (b != c) {
+				bytes[i] = c;
+				changed = true;
+			}
 		}
 
-		return changed ? bld.toByteString() : s;
+		return changed ? ByteString.copyOf(bytes) : s;
 	}
 
 	private static byte toUpper(byte b) {
@@ -740,19 +752,21 @@ public final class StringLib {
 		return c >= 'a' && c <= 'z' ? (byte) (c - (int) 'a' + (int) 'A') : b;
 	}
 
-	private static ByteString toUpperCase(ByteString s) {
-		boolean changed = false;
+	private static ByteString toUpperCase(ExecutionContext context, ByteString s) {
+		chargeConversion(context, s.lengthEstimate());
 
-		ByteStringBuilder bld = new ByteStringBuilder();
-		ByteIterator it = s.byteIterator();
-		while (it.hasNext()) {
-			byte b = it.nextByte();
+		byte[] bytes = s.getBytes();
+		boolean changed = false;
+		for (int i = 0; i < bytes.length; i++) {
+			byte b = bytes[i];
 			byte c = toUpper(b);
-			changed |= b != c;
-			bld.append(c);
+			if (b != c) {
+				bytes[i] = c;
+				changed = true;
+			}
 		}
 
-		return changed ? bld.toByteString() : s;
+		return changed ? ByteString.copyOf(bytes) : s;
 	}
 
 	static class Byte extends AbstractLibFunction {
@@ -773,12 +787,18 @@ public final class StringLib {
 			i = lowerBound(i, len);
 			j = upperBound(j, len);
 
-			List<Object> buf = new ArrayList<>();
-			for (int idx = i; idx <= j; idx++) {
-				int c = s.byteAt(idx - 1) & 0xff;
-				buf.add(Long.valueOf(c));
+			if (i > j) {
+				context.getReturnBuffer().setTo();
+				return;
 			}
-			context.getReturnBuffer().setToContentsOf(buf);
+			int n = j - i + 1;
+			WorkMeter.charge(context, (long) n * WorkMeter.VALUE);
+
+			Object[] values = new Object[n];
+			for (int k = 0; k < n; k++) {
+				values[k] = Long.valueOf(s.byteAt(i - 1 + k) & 0xff);
+			}
+			context.getReturnBuffer().setToContentsOf(values);
 		}
 
 	}
@@ -793,6 +813,7 @@ public final class StringLib {
 		@Override
 		protected void invoke(ExecutionContext context, ArgumentIterator args) throws ResolvedControlThrowable {
 			byte[] bytes = new byte[args.size()];
+			WorkMeter.charge(context, (long) bytes.length * WorkMeter.NUMBER_ARGUMENT);
 
 			for (int i = 0; i < bytes.length; i++) {
 				bytes[i] = (byte) args.nextIntRange(0, 255);
@@ -830,20 +851,19 @@ public final class StringLib {
 
 		@Override
 		protected void invoke(ExecutionContext context, ArgumentIterator args) throws ResolvedControlThrowable {
-			String s = args.nextString().toRawString();
-			String pattern = args.nextString().toRawString();
+			ByteString str = args.nextString();
+			ByteString patternStr = args.nextString();
 			int init = args.nextOptionalInt(1);
 			boolean plain = args.nextOptionalBoolean(false);
 
-			init = lowerBound(init, s.length());
-
 			if (plain) {
 				// find a substring
-				int at = s.indexOf(pattern, init - 1);
+				init = lowerBound(init, str.length());
+				int at = indexOf(str, patternStr, init - 1, WorkMeter.forBytes(context));
 				if (at >= 0) {
 					context.getReturnBuffer().setTo(
 							(long) (at + 1),
-							(long) (at + pattern.length()));
+							(long) (at + patternStr.length()));
 				}
 				else {
 					context.getReturnBuffer().setTo(null);
@@ -851,6 +871,11 @@ public final class StringLib {
 			}
 			else {
 				// find a pattern
+				chargePreparation(context, (long) str.lengthEstimate() + patternStr.lengthEstimate(), patternStr);
+				String s = str.toRawString();
+				String pattern = patternStr.toRawString();
+				init = lowerBound(init, s.length());
+
 				StringPattern pat = StringPattern.fromString(pattern);
 
 				StringPattern.Match m = pat.match(s, init - 1, context);
@@ -867,6 +892,52 @@ public final class StringLib {
 					context.getReturnBuffer().setTo(null);
 				}
 			}
+		}
+
+		/**
+		 * The index of the first occurrence of {@code p} in {@code s} at or after {@code from},
+		 * or {@code -1}, as {@link String#indexOf(String, int)}. The meter counts the bytes
+		 * compared: at most the length of {@code p} at each position.
+		 */
+		static int indexOf(ByteString s, ByteString p, int from, WorkMeter meter) {
+			// copied once: much faster than byteAt at every position
+			byte[] a = s.getBytes();
+			byte[] b = p.getBytes();
+			meter.add(((long) a.length + b.length) * WorkMeter.BYTE);
+
+			int n = a.length;
+			int m = b.length;
+			from = Math.max(from, 0);
+			if (from >= n) {
+				return m == 0 ? n : -1;
+			}
+			if (m == 0) {
+				return from;
+			}
+
+			byte first = b[0];
+			int last = n - m;
+			int i = from;
+			while (i <= last) {
+				// the positions are counted in pieces, the bytes compared after each try
+				int end = Math.min(last, i + 4095);
+				meter.add((long) (end - i + 1) * WorkMeter.COMPARE_BYTE);
+				for ( ; i <= end; i++) {
+					if (a[i] == first) {
+						int k = 1;
+						while (k < m && a[i + k] == b[k]) {
+							k++;
+						}
+						if (k > 1) {
+							meter.add((long) k * WorkMeter.COMPARE_BYTE);
+						}
+						if (k == m) {
+							return i;
+						}
+					}
+				}
+			}
+			return -1;
 		}
 
 	}
@@ -1234,13 +1305,15 @@ public final class StringLib {
 			return mantissa + rest;
 		}
 
-		private void format_s(ExecutionContext context, String fmt, StringBuilder bld, ArgumentIterator args, int index, int width, int flags, int precision)
+		private void format_s(ExecutionContext context, WorkMeter work, String fmt, StringBuilder bld, ArgumentIterator args, int index, int width, int flags, int precision)
 				throws ResolvedControlThrowable {
 			Object v = args.nextAny();
 			final String s;
 
 			ByteString stringValue = Conversions.stringValueOf(v);
 			if (stringValue != null) {
+				// made raw and appended, whatever the precision
+				work.add(2L * stringValue.lengthEstimate() * WorkMeter.CONVERT_BYTE);
 				s = stringValue.toRawString();
 			}
 			else {
@@ -1253,7 +1326,7 @@ public final class StringLib {
 					catch (UnresolvedControlThrowable ct) {
 						throw ct.resolve(this, new SuspendedState(fmt, bld.toString(), args, index, width, flags, precision));
 					}
-					resume_s(context, bld, width, flags, precision);
+					resume_s(context, work, bld, width, flags, precision);
 					return;
 				}
 				else {
@@ -1263,16 +1336,24 @@ public final class StringLib {
 			bld.append(justified(width, flags, trimmed(precision, s)));
 		}
 
-		private static void resume_s(ExecutionContext context, StringBuilder bld, int width, int flags, int precision) {
+		private static void resume_s(ExecutionContext context, WorkMeter work, StringBuilder bld, int width, int flags, int precision) {
 			Object o = context.getReturnBuffer().get0();
 			ByteString sv = Conversions.stringValueOf(o);
+			if (sv != null) {
+				work.add(2L * sv.lengthEstimate() * WorkMeter.CONVERT_BYTE);
+			}
 			String s = sv != null ? sv.toRawString() : "";
 			bld.append(justified(width, flags, trimmed(precision, s)));
 		}
 
-		private void format_q(StringBuilder bld, ArgumentIterator args) {
+		private void format_q(WorkMeter work, StringBuilder bld, ArgumentIterator args) {
 			Object o = args.nextAny();
 			final String s;
+
+			if (o instanceof ByteString) {
+				// escaped and appended
+				work.add(2L * ((ByteString) o).lengthEstimate() * WorkMeter.CONVERT_BYTE);
+			}
 
 			if (o == null) s = LuaFormat.NIL.toString();
 			else if (o instanceof Boolean) s = LuaFormat.toString(((Boolean) o).booleanValue());
@@ -1286,7 +1367,7 @@ public final class StringLib {
 			bld.append(s);
 		}
 
-		private int placeholder(ExecutionContext context, String fmt, int from, StringBuilder bld, ArgumentIterator args)
+		private int placeholder(ExecutionContext context, WorkMeter work, String fmt, int from, StringBuilder bld, ArgumentIterator args)
 				throws ResolvedControlThrowable {
 
 			if (!args.hasNext()) {
@@ -1430,11 +1511,11 @@ public final class StringLib {
 						break;
 
 					case 's':
-						format_s(context, fmt, bld, args, index, width, flags, precision);
+						format_s(context, work, fmt, bld, args, index, width, flags, precision);
 						break;
 
 					case 'q':
-						format_q(bld, args);
+						format_q(work, bld, args);
 						break;
 
 					default:
@@ -1450,9 +1531,14 @@ public final class StringLib {
 		@Override
 		protected void invoke(ExecutionContext context, ArgumentIterator args) throws ResolvedControlThrowable {
 			// raw strings, as for patterns: one char for each byte
-			String fmt = args.nextString().toRawString();
+			ByteString fmtString = args.nextString();
+			// one meter for the whole call, which charges the work before it is done
+			WorkMeter work = WorkMeter.forBytes(context);
+			// made raw, and its literal parts appended
+			work.add(2L * fmtString.lengthEstimate() * WorkMeter.CONVERT_BYTE);
+			String fmt = fmtString.toRawString();
 			StringBuilder bld = new StringBuilder();
-			run(context, fmt, args, bld, 0);
+			run(context, work, fmt, args, bld, 0);
 		}
 
 		@Override
@@ -1462,21 +1548,24 @@ public final class StringLib {
 			StringBuilder bld = new StringBuilder(ss.str);
 
 			// resume the suspended %s
-			resume_s(context, bld, ss.width, ss.flags, ss.precision);
+			WorkMeter work = WorkMeter.forBytes(context);
+			resume_s(context, work, bld, ss.width, ss.flags, ss.precision);
 
 			// continue the loop
-			run(context, ss.fmt, ss.args, bld, ss.index);
+			run(context, work, ss.fmt, ss.args, bld, ss.index);
 		}
 
-		private void run(ExecutionContext context, String fmt, ArgumentIterator args, StringBuilder bld, int idx)
+		private void run(ExecutionContext context, WorkMeter work, String fmt, ArgumentIterator args, StringBuilder bld, int idx)
 				throws ResolvedControlThrowable {
 			do {
 				idx = literal(fmt, idx, bld);
 				if (idx >= 0) {
-					idx = placeholder(context, fmt, idx, bld, args);
+					idx = placeholder(context, work, fmt, idx, bld, args);
 				}
 			} while (idx >= 0);
 
+			// the result is copied and made bytes
+			work.add(2L * bld.length() * WorkMeter.CONVERT_BYTE);
 			context.getReturnBuffer().setTo(ByteString.fromRaw(bld.toString()));
 		}
 
@@ -1546,8 +1635,12 @@ public final class StringLib {
 
 		@Override
 		protected void invoke(ExecutionContext context, ArgumentIterator args) throws ResolvedControlThrowable {
-			String s = args.nextString().toRawString();
-			String pattern = args.nextString().toRawString();
+			ByteString str = args.nextString();
+			ByteString patternStr = args.nextString();
+
+			chargePreparation(context, (long) str.lengthEstimate() + patternStr.lengthEstimate(), patternStr);
+			String s = str.toRawString();
+			String pattern = patternStr.toRawString();
 
 			StringPattern pat = StringPattern.fromString(pattern, true);
 
@@ -1569,8 +1662,9 @@ public final class StringLib {
 
 		@Override
 		protected void invoke(ExecutionContext context, ArgumentIterator args) throws ResolvedControlThrowable {
-			String s = args.nextString().toRawString();
-			String pattern = args.nextString().toRawString();
+			ByteString str = args.nextString();
+			ByteString patternStr = args.nextString();
+			long rawBytes = (long) str.lengthEstimate() + patternStr.lengthEstimate();
 
 			final Object repl;
 			if (!args.hasNext()) {
@@ -1582,7 +1676,8 @@ public final class StringLib {
 				// a string?
 				ByteString replStr = Conversions.stringValueOf(o);
 				if (replStr != null) {
-					repl = replStr.toRawString();
+					rawBytes += replStr.lengthEstimate();
+					repl = replStr;
 				}
 				else if (o instanceof Table || o instanceof LuaFunction) {
 					repl = o;
@@ -1594,9 +1689,14 @@ public final class StringLib {
 
 			int n = args.nextOptionalInt(Integer.MAX_VALUE);
 
+			chargePreparation(context, rawBytes, patternStr);
+			String s = str.toRawString();
+			String pattern = patternStr.toRawString();
+			Object raw = repl instanceof ByteString ? ((ByteString) repl).toRawString() : repl;
+
 			StringPattern pat = StringPattern.fromString(pattern);
 
-			run(context, s, 0, new StringBuilder(), pat, 0, n, repl);
+			run(context, s, 0, new StringBuilder(), pat, 0, n, raw);
 		}
 
 		private static class State {
@@ -1657,6 +1757,8 @@ public final class StringLib {
 				idx = m.endIndex() != idx ? m.endIndex() : m.endIndex() + 1;
 
 				if (repl instanceof String) {
+					// the replacement is scanned for its escapes at each match
+					work.add((long) ((String) repl).length() * WorkMeter.CONVERT_BYTE);
 					String r = stringReplace((String) repl, m.fullMatch(), captures);
 					work.addAppend(r.length());
 					bld.append(r);
@@ -1671,9 +1773,12 @@ public final class StringLib {
 
 			// non-matching suffix
 			if (idx < str.length()) {
+				work.addAppend(str.length() - idx);
 				bld.append(str.substring(idx, str.length()));
 			}
 
+			// the result is copied and made bytes
+			work.add((long) bld.length() * WorkMeter.CONVERT_BYTE);
 			context.getReturnBuffer().setTo(ByteString.fromRaw(bld.toString()), (long) count);
 		}
 
@@ -1804,7 +1909,7 @@ public final class StringLib {
 		@Override
 		protected void invoke(ExecutionContext context, ArgumentIterator args) throws ResolvedControlThrowable {
 			ByteString s = args.nextString();
-			context.getReturnBuffer().setTo(toLowerCase(s));
+			context.getReturnBuffer().setTo(toLowerCase(context, s));
 		}
 
 	}
@@ -1818,10 +1923,13 @@ public final class StringLib {
 
 		@Override
 		protected void invoke(ExecutionContext context, ArgumentIterator args) throws ResolvedControlThrowable {
-			String s = args.nextString().toRawString();
-			String pattern = args.nextString().toRawString();
+			ByteString str = args.nextString();
+			ByteString patternStr = args.nextString();
 			int init = args.nextOptionalInt(1);
 
+			chargePreparation(context, (long) str.lengthEstimate() + patternStr.lengthEstimate(), patternStr);
+			String s = str.toRawString();
+			String pattern = patternStr.toRawString();
 			init = lowerBound(init, s.length());
 
 			StringPattern pat = StringPattern.fromString(pattern);
@@ -1907,6 +2015,7 @@ public final class StringLib {
 		@Override
 		protected void invoke(ExecutionContext context, ArgumentIterator args) throws ResolvedControlThrowable {
 			ByteString s = args.nextString();
+			chargeConversion(context, s.lengthEstimate());
 
 			byte[] bytes = s.getBytes();
 			for (int i = 0; i < bytes.length / 2; i++) {
@@ -1941,7 +2050,15 @@ public final class StringLib {
 			i = lowerBound(i, len) - 1;
 			j = upperBound(j, len);
 
-			ByteString result = i < j ? s.substring(i, j) : ByteString.empty();
+			final ByteString result;
+			if (i < j) {
+				// charged before the copy
+				WorkMeter.chargeBytes(context, j - i);
+				result = s.substring(i, j);
+			}
+			else {
+				result = ByteString.empty();
+			}
 
 			context.getReturnBuffer().setTo(result);
 		}
@@ -1968,7 +2085,7 @@ public final class StringLib {
 		@Override
 		protected void invoke(ExecutionContext context, ArgumentIterator args) throws ResolvedControlThrowable {
 			ByteString s = args.nextString();
-			context.getReturnBuffer().setTo(toUpperCase(s));
+			context.getReturnBuffer().setTo(toUpperCase(context, s));
 		}
 
 	}

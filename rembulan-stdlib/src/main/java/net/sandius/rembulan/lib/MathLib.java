@@ -51,6 +51,7 @@ import net.sandius.rembulan.runtime.ExecutionContext;
 import net.sandius.rembulan.runtime.LuaFunction;
 import net.sandius.rembulan.runtime.ResolvedControlThrowable;
 import net.sandius.rembulan.runtime.UnresolvedControlThrowable;
+import net.sandius.rembulan.runtime.WorkMeter;
 import net.sandius.rembulan.util.Check;
 
 import java.util.Objects;
@@ -957,8 +958,11 @@ public final class MathLib {
 		}
 
 		private void run(ExecutionContext context, Object[] args, int idx, Object best) throws ResolvedControlThrowable {
+			// counts the arguments compared (strings are charged the bytes compared, too)
+			WorkMeter work = new WorkMeter(context, WorkMeter.VALUE);
 			for ( ; idx < args.length; idx++) {
 				Object o = args[idx];
+				work.step();
 
 				try {
 					if (isMax) {

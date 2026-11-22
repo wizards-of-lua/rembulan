@@ -1,5 +1,7 @@
 package net.sandius.rembulan.runtime;
 
+import net.sandius.rembulan.ByteString;
+
 /**
  * Charges the ticks of work that a library function or an operator does in Java, in a loop that
  * can't pause, such as matching a pattern, building a long string or reading a file.
@@ -10,12 +12,16 @@ package net.sandius.rembulan.runtime;
  * it registers 0 ordinary ticks with {@link ExecutionContext#registerTicks(int)}: so the
  * unpausable ticks since the last ordinary registration are those of this call alone, and work
  * done before the call (in the same piece of compiled code) isn't counted as the call's. Short
- * calls never register anything.</p>
+ * calls never register anything. Work whose size is known before it starts is charged in one
+ * piece with {@link #charge(ExecutionContext, long)}, so that the scheduler can stop it before it
+ * is done.</p>
  *
  * <p>The costs are fixed, measured so that a tick stands for about 200 ns of work, like a few
  * operations of compiled Lua code: on JDK 21 (x86-64, warm JIT) with a scheduler that only counts
- * the ticks, each kind of work comes out at 100-350 ns per tick. Within a kind, some inputs cost
- * less per unit than others; their work is charged more ticks than it takes, not fewer.</p>
+ * the ticks, each kind of work comes out at 100-330 ns per tick. Within a kind, some inputs cost
+ * less per unit than others (an unchanged string in string.upper, a numeral in a lot of
+ * whitespace); their work is charged more ticks than it takes, not
+ * fewer.</p>
  */
 public final class WorkMeter {
 
@@ -34,8 +40,8 @@ public final class WorkMeter {
 	/** Pattern steps that turning a match into a result costs in gsub. */
 	public static final int PATTERN_STEPS_PER_RESULT = 6;
 
-	/** A byte copied into a string being built, or by the {@code ..} operator (400 per tick). */
-	public static final int BYTE = 3;
+	/** A byte copied into a string being built, or by the {@code ..} operator (600 per tick). */
+	public static final int BYTE = 2;
 
 	/** An append to a string being built, besides its bytes (12 per tick). */
 	public static final int APPEND = 100;
@@ -47,15 +53,60 @@ public final class WorkMeter {
 	public static final int WRITE_BYTE = 6;
 
 	/** A step of a raw sort of numbers: one level of a heap's sift, two compares and a swap. */
-	public static final int SORT_STEP_NUMBERS = 1200;
+	public static final int SORT_STEP_NUMBERS = 700;
 
-	/** A step of a raw sort of strings. */
-	public static final int SORT_STEP_STRINGS = 4800;
+	/** A step of a raw sort of strings, besides the bytes compared ({@link #COMPARE_BYTE}). */
+	public static final int SORT_STEP_STRINGS = 500;
 
-	/** A table element moved by table.insert, table.remove or table.move: a get and a set. */
+	/**
+	 * A table element moved by table.insert, table.remove or table.move: a get and a set; also
+	 * a value put into a new table by table.pack.
+	 */
 	public static final int TABLE_MOVE = 300;
 
+	/** A byte compared by a raw sort of strings (400 per tick). */
+	public static final int COMPARE_BYTE = 3;
+
+	/**
+	 * A byte converted on its own: changing its case, reversing, turning it into a char for a
+	 * pattern or for {@code string.format}, or decoding a number from a string (200 per tick).
+	 */
+	public static final int CONVERT_BYTE = 6;
+
+	/** A byte decoded as UTF-8 by the utf8 library (133 per tick). */
+	public static final int UTF8_BYTE = 9;
+
+	/**
+	 * A byte of a string turned into a number by tonumber: decoded, trimmed, parsed, and copied
+	 * into the message of a failed parse (66 per tick).
+	 */
+	public static final int NUMBER_BYTE = 18;
+
+	/** An argument copied, or a value compared in a library function, besides its work (200 per tick). */
+	public static final int ARGUMENT = 6;
+
+	/** An argument read as a number and checked, as by string.char (50 per tick). */
+	public static final int NUMBER_ARGUMENT = 24;
+
+	/**
+	 * A value made for the results of a call, such as a number for each byte, or a value that
+	 * math.max or math.min compares (20 per tick).
+	 */
+	public static final int VALUE = 60;
+
+	/** A value got from a table by table.unpack (12 per tick). */
+	public static final int TABLE_ACCESS = 100;
+
+	/** A character of a pattern, parsed before the match (10 per tick). */
+	public static final int PATTERN_CHAR = 120;
+
 	private static final long UNITS_PER_CHARGE = 50L * UNITS_PER_TICK;
+
+	/**
+	 * The fewest ticks that {@link #charge(ExecutionContext, long)} registers: less work isn't
+	 * worth the two calls to the scheduler.
+	 */
+	public static final int MIN_CHARGE_TICKS = 5;
 
 	private final ExecutionContext context;
 	private final int unitsPerStep;
@@ -103,17 +154,51 @@ public final class WorkMeter {
 
 	/**
 	 * Charges copying {@code bytes} bytes in one piece, before it is done (the {@code ..}
-	 * operator): nothing for less than a tick's worth.
+	 * operator): nothing for less than {@link #MIN_CHARGE_TICKS} ticks' worth.
 	 *
 	 * @param context  the context to charge, must not be {@code null}
 	 */
 	public static void chargeBytes(ExecutionContext context, long bytes) {
-		long ticks = bytes * BYTE / UNITS_PER_TICK;
-		if (ticks > 0) {
-			// what came before is ordinary work, not this copy's
+		charge(context, bytes * BYTE);
+	}
+
+	/**
+	 * Charges {@code units} units of work in one piece, before or after it is done: nothing for
+	 * less than {@link #MIN_CHARGE_TICKS} ticks' worth.
+	 *
+	 * @param context  the context to charge, must not be {@code null}
+	 */
+	public static void charge(ExecutionContext context, long units) {
+		long ticks = units / UNITS_PER_TICK;
+		if (ticks >= MIN_CHARGE_TICKS) {
+			// what came before is ordinary work, not this one's
 			context.registerTicks(0);
 			context.registerTicksUnpausable((int) Math.min(ticks, Integer.MAX_VALUE));
 		}
+	}
+
+	/**
+	 * Compares two byte strings like {@link ByteString#compareTo(ByteString)}, and counts the
+	 * bytes compared.
+	 */
+	public int compare(ByteString a, ByteString b) {
+		if (a == b) {
+			return 0;
+		}
+		int index = a.mismatch(b);
+		add((long) (index < 0 ? a.length() : index) * COMPARE_BYTE);
+		return compareAt(a, b, index);
+	}
+
+	// the result of compareTo, from the index of the first byte that differs
+	private static int compareAt(ByteString a, ByteString b, int index) {
+		return index < 0
+				? 0
+				: index == a.length()
+						? -1
+						: index == b.length()
+								? 1
+								: (a.byteAt(index) & 0xff) - (b.byteAt(index) & 0xff);
 	}
 
 	/** Counts one step of the meter's main kind of work. */

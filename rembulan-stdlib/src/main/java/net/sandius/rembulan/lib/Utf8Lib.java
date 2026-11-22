@@ -51,6 +51,7 @@ import net.sandius.rembulan.Table;
 import net.sandius.rembulan.runtime.ExecutionContext;
 import net.sandius.rembulan.runtime.LuaFunction;
 import net.sandius.rembulan.runtime.ResolvedControlThrowable;
+import net.sandius.rembulan.runtime.WorkMeter;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -332,6 +333,8 @@ public final class Utf8Lib {
 
 		@Override
 		protected void invoke(ExecutionContext context, ArgumentIterator args) throws ResolvedControlThrowable {
+			// charged before it is done
+			WorkMeter.charge(context, (long) args.size() * WorkMeter.NUMBER_ARGUMENT);
 			ByteStringBuilder bld = new ByteStringBuilder();
 			for (int arg = 1; args.hasNext(); arg++) {
 				long code = args.nextInteger();
@@ -378,8 +381,11 @@ public final class Utf8Lib {
 			int len = s.length();
 			long pos = Math.max(last, 0);
 			if (last >= 0 && pos < len) {
+				// a run of continuation bytes can be as long as the string
+				WorkMeter work = new WorkMeter(context, WorkMeter.UTF8_BYTE);
 				pos += 1;
 				while (isContinuation(s, (int) pos)) {
+					work.step();
 					pos += 1;
 				}
 			}
@@ -419,6 +425,7 @@ public final class Utf8Lib {
 				throw new BadArgumentException(3, name(), "out of range");
 			}
 
+			WorkMeter work = new WorkMeter(context, WorkMeter.UTF8_BYTE);
 			List<Object> result = new ArrayList<>();
 			long pos = first - 1;
 			while (pos < last) {
@@ -427,7 +434,9 @@ public final class Utf8Lib {
 					throw new LuaRuntimeException(INVALID_CODE);
 				}
 				result.add((long) code);
-				pos += sequenceLength(code);
+				int length = sequenceLength(code);
+				work.add((long) length * WorkMeter.UTF8_BYTE + WorkMeter.VALUE);
+				pos += length;
 			}
 			context.getReturnBuffer().setToContentsOf(result);
 		}
@@ -455,6 +464,7 @@ public final class Utf8Lib {
 				throw new BadArgumentException(3, name(), "final position out of string");
 			}
 
+			WorkMeter work = new WorkMeter(context, WorkMeter.UTF8_BYTE);
 			long count = 0;
 			long pos = first - 1;
 			while (pos < last) {
@@ -463,7 +473,9 @@ public final class Utf8Lib {
 					context.getReturnBuffer().setTo(null, pos + 1);
 					return;
 				}
-				pos += sequenceLength(code);
+				int length = sequenceLength(code);
+				work.steps(length);
+				pos += length;
 				count += 1;
 			}
 			context.getReturnBuffer().setTo(count);
@@ -489,9 +501,11 @@ public final class Utf8Lib {
 				throw new BadArgumentException(3, name(), "position out of range");
 			}
 			int pos = (int) start - 1;
+			WorkMeter work = new WorkMeter(context, WorkMeter.UTF8_BYTE);
 
 			if (n == 0) {
 				while (pos > 0 && isContinuation(s, pos)) {
+					work.step();
 					pos -= 1;
 				}
 			}
@@ -502,6 +516,7 @@ public final class Utf8Lib {
 				if (n < 0) {
 					while (n < 0 && pos > 0) {
 						do {
+							work.step();
 							pos -= 1;
 						} while (pos > 0 && isContinuation(s, pos));
 						n += 1;
@@ -511,6 +526,7 @@ public final class Utf8Lib {
 					n -= 1;
 					while (n > 0 && pos < len) {
 						do {
+							work.step();
 							pos += 1;
 						} while (isContinuation(s, pos));
 						n -= 1;
