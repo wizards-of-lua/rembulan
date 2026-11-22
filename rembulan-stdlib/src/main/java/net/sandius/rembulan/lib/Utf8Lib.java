@@ -252,6 +252,9 @@ public final class Utf8Lib {
 	// it needs to be, which UTF-8 forbids. The first is for a continuation byte on its own.
 	private static final int[] LIMITS = { 0xFF, 0x7F, 0x7FF, 0xFFFF };
 
+	/** The longest slice that utf8.codepoint decodes, in bytes, as string.byte. */
+	static final int MAX_CODEPOINT_BYTES = 1000000;
+
 	// Beyond the end there is nothing, as with the '\0' behind a string in C.
 	private static boolean isContinuation(ByteString s, int pos) {
 		return pos < s.length() && (s.byteAt(pos) & 0xC0) == 0x80;
@@ -423,6 +426,14 @@ public final class Utf8Lib {
 			}
 			if (last > len) {
 				throw new BadArgumentException(3, name(), "out of range");
+			}
+
+			if (first > last) {
+				context.getReturnBuffer().setTo();
+				return;
+			}
+			if (last - first >= MAX_CODEPOINT_BYTES) {
+				throw new LuaRuntimeException("string slice too long");
 			}
 
 			WorkMeter work = new WorkMeter(context, WorkMeter.UTF8_BYTE);

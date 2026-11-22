@@ -508,6 +508,19 @@ public class LibraryWorkTicksTest extends TestBase {
     assertThat(actual).isEqualTo(new Object[] {false, STOPPED});
   }
 
+  @Test
+  public void test_byte_and_codepoint_return_at_most_a_million_values() throws Exception {
+    Object[] actual = run(new Scheduler(Long.MAX_VALUE),
+        "local s, t = ...\n"
+            + "return select('#', s:byte(1, -1)), select('#', utf8.codepoint(s, 1, -1)),"
+            + " pcall(string.byte, t, 1, -1)",
+        MB, MB + 1);
+    assertThat(actual).isEqualTo(new Object[] {1000000L, 1000000L, false, "string slice too long"});
+    actual = run(new Scheduler(Long.MAX_VALUE),
+        "local t = ... return pcall(utf8.codepoint, t, 1, -1)", MB + 1);
+    assertThat(actual).isEqualTo(new Object[] {false, "string slice too long"});
+  }
+
   @Test(timeout = 10000)
   public void test_utf8_codes_over_continuation_bytes_is_stopped() throws Exception {
     // called with a position, the iterator looks for the end of that character through a

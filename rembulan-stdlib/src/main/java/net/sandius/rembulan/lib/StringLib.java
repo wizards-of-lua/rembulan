@@ -723,6 +723,9 @@ public final class StringLib {
 		WorkMeter.charge(context, length * WorkMeter.CONVERT_BYTE);
 	}
 
+	/** The most values that string.byte returns, as table.unpack. */
+	static final int MAX_BYTE_VALUES = 1000000;
+
 	private static byte toLower(byte b) {
 		int c = b & 0xff;
 		// FIXME: dealing with ASCII only
@@ -790,6 +793,9 @@ public final class StringLib {
 			if (i > j) {
 				context.getReturnBuffer().setTo();
 				return;
+			}
+			if (j - i >= MAX_BYTE_VALUES) {
+				throw new LuaRuntimeException("string slice too long");
 			}
 			int n = j - i + 1;
 			WorkMeter.charge(context, (long) n * WorkMeter.VALUE);
