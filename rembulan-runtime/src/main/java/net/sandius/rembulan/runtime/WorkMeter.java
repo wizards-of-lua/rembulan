@@ -20,7 +20,7 @@ import net.sandius.rembulan.ByteString;
  * operations of compiled Lua code: on JDK 21 (x86-64, warm JIT) with a scheduler that only counts
  * the ticks, each kind of work comes out at 100-330 ns per tick. Within a kind, some inputs cost
  * less per unit than others (an unchanged string in string.upper, a numeral in a lot of
- * whitespace); their work is charged more ticks than it takes, not
+ * whitespace, compiling whitespace); their work is charged more ticks than it takes, not
  * fewer.</p>
  */
 public final class WorkMeter {
@@ -104,6 +104,12 @@ public final class WorkMeter {
 	/** A character of a pattern, parsed before the match (10 per tick). */
 	public static final int PATTERN_CHAR = 120;
 
+	/**
+	 * A byte of Lua source compiled by load (7 ticks): charged as ordinary ticks after
+	 * compiling, see {@link #chargeOrdinary(ExecutionContext, long)}.
+	 */
+	public static final int COMPILE_BYTE = 7 * UNITS_PER_TICK;
+
 	private static final long UNITS_PER_CHARGE = 50L * UNITS_PER_TICK;
 
 	/**
@@ -178,6 +184,20 @@ public final class WorkMeter {
 			// what came before is ordinary work, not this one's
 			context.registerTicks(0);
 			context.registerTicksUnpausable((int) Math.min(ticks, Integer.MAX_VALUE));
+		}
+	}
+
+	/**
+	 * Charges {@code units} units of work that has been done as ordinary ticks, with
+	 * {@link ExecutionContext#registerTicks(int)}: for work that a scheduler shouldn't stop, such
+	 * as compiling, but that should make the code pause sooner afterwards.
+	 *
+	 * @param context  the context to charge, must not be {@code null}
+	 */
+	public static void chargeOrdinary(ExecutionContext context, long units) {
+		long ticks = units / UNITS_PER_TICK;
+		if (ticks > 0) {
+			context.registerTicks((int) Math.min(ticks, Integer.MAX_VALUE));
 		}
 	}
 

@@ -1684,9 +1684,11 @@ public final class BasicLib {
 				fn = loader.loadTextChunk(new Variable(env), chunkName, chunkText.toString());
 			}
 			catch (LoaderException ex) {
+				chargeCompiling(context, chunkText);
 				context.getReturnBuffer().setTo(null, ex.getLuaStyleErrorMessage());
 				return;
 			}
+			chargeCompiling(context, chunkText);
 
 			if (fn != null) {
 				context.getReturnBuffer().setTo(fn);
@@ -1733,6 +1735,7 @@ public final class BasicLib {
 					else {
 						ByteString s = Conversions.stringValueOf(o);
 						if (s != null) {
+							WorkMeter.chargeBytes(context, s.lengthEstimate());
 							bld.append(s);
 						}
 						else {
@@ -1795,7 +1798,7 @@ public final class BasicLib {
 			else {
 				final LuaFunction fn;
 				try {
-					fn = loadTextChunkFromFile(fileSystem, loader, chunkName, modeString, env);
+					fn = loadTextChunkFromFile(context, fileSystem, loader, chunkName, modeString, env);
 				}
 				catch (LoaderException ex) {
 					context.getReturnBuffer().setTo(null, ex.getLuaStyleErrorMessage());
@@ -1811,8 +1814,15 @@ public final class BasicLib {
 
 	}
 
-	static LuaFunction loadTextChunkFromFile(FileSystem fileSystem, ChunkLoader loader, String fileName, ByteString modeString, Object env)
-			throws LoaderException {
+	// Compiling is charged as ordinary ticks, after it is done: a scheduler can't stop it, but the
+	// code pauses sooner afterwards, so that a loop of loads doesn't hold the thread.
+	static void chargeCompiling(ExecutionContext context, ByteString chunkText) {
+		WorkMeter.chargeOrdinary(context, (long) chunkText.lengthEstimate() * WorkMeter.COMPILE_BYTE);
+	}
+
+	// loadfile, dofile and require's path searcher; compiling is charged as in load
+	static LuaFunction loadTextChunkFromFile(ExecutionContext context, FileSystem fileSystem, ChunkLoader loader,
+			String fileName, ByteString modeString, Object env) throws LoaderException {
 
 		final LuaFunction fn;
 		try {
@@ -1825,7 +1835,12 @@ public final class BasicLib {
 			// FIXME: this is extremely wasteful!
 			byte[] bytes = Files.readAllBytes(p);
 			ByteString chunkText = ByteString.copyOf(bytes);
-			fn = loader.loadTextChunk(new Variable(env), fileName, chunkText.toString());
+			try {
+				fn = loader.loadTextChunk(new Variable(env), fileName, chunkText.toString());
+			}
+			finally {
+				chargeCompiling(context, chunkText);
+			}
 		}
 		catch (InvalidPathException | IOException ex) {
 			throw new LoaderException(ex, fileName);
@@ -1867,7 +1882,7 @@ public final class BasicLib {
 
 			final LuaFunction fn;
 			try {
-				fn = loadTextChunkFromFile(fileSystem, loader, fileName.toString(), Load.DEFAULT_MODE, env);
+				fn = loadTextChunkFromFile(context, fileSystem, loader, fileName.toString(), Load.DEFAULT_MODE, env);
 			}
 			catch (LoaderException ex) {
 				throw new LuaRuntimeException(ex.getLuaStyleErrorMessage());

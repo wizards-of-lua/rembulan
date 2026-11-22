@@ -65,7 +65,9 @@ public class LibraryWorkTicksTest extends TestBase {
   private Object[] run(SchedulingContext scheduler, String program, int... n) throws Exception {
     StateContext state = StateContexts.newDefaultInstance();
     RuntimeEnvironment runtimeEnvironment = RuntimeEnvironments.system();
-    Table env = StandardLibrary.in(runtimeEnvironment).installInto(state);
+    Table env = StandardLibrary.in(runtimeEnvironment)
+        .withLoader(CompilerChunkLoader.of("LibraryWorkTicksTest_load"))
+        .installInto(state);
     IoLib.installInto(state, env, runtimeEnvironment);
     LuaFunction main = CompilerChunkLoader.of("LibraryWorkTicksTest")
         .loadTextChunk(new Variable(env), "test", program);
@@ -529,6 +531,41 @@ public class LibraryWorkTicksTest extends TestBase {
         "local s = 'a' .. string.rep('\\x80', 1000000)\n"
             + "return pcall(utf8.codes(s), s, 1)");
     assertThat(actual).isEqualTo(new Object[] {false, STOPPED});
+  }
+
+  @Test
+  public void test_load_charges_compiling_as_ordinary_ticks_afterwards() throws Exception {
+    // a scheduler may not stop compiling, but the code is charged for it
+    Scheduler scheduler = new Scheduler(1000);
+    Object[] actual = run(scheduler,
+        "local f = load(string.rep(' ', 100000) .. 'return 42') return f()");
+    assertThat(actual).isEqualTo(new Object[] {42L});
+    assertThat(scheduler.ticks).isGreaterThanOrEqualTo(ticks(100009L * WorkMeter.COMPILE_BYTE));
+    assertThat(scheduler.unpausableTicks).isLessThan(1000L);
+  }
+
+  @Test
+  public void test_load_of_a_function_charges_its_pieces_and_compiling() throws Exception {
+    Scheduler scheduler = new Scheduler(Long.MAX_VALUE);
+    Object[] actual = run(scheduler,
+        "local p = {string.rep(' ', 50000), string.rep(' ', 50000), 'return 7'} local i = 0\n"
+            + "local f = load(function() i = i + 1 return p[i] end) return f()");
+    assertThat(actual).isEqualTo(new Object[] {7L});
+    assertThat(scheduler.ticks).isGreaterThanOrEqualTo(ticks(100008L * WorkMeter.COMPILE_BYTE));
+  }
+
+  @Test
+  public void test_loadfile_dofile_and_require_charge_compiling() throws Exception {
+    // a file of 100,009 bytes, compiled by each of them: not stopped, charged as ordinary ticks
+    Path f = file(repeat(" ", 100000) + "return 42");
+    String dir = lua(f.getParent()).replace("'", "");
+    for (String call : new String[] {"loadfile(F)()", "dofile(F)", "require('data')"}) {
+      Scheduler scheduler = new Scheduler(1000);
+      Object[] actual = run(scheduler,
+          "F = '" + dir + "/data.txt' package.path = '" + dir + "/?.txt' return " + call);
+      assertThat(actual).as(call).isEqualTo(new Object[] {42L});
+      assertThat(scheduler.ticks).as(call).isGreaterThanOrEqualTo(ticks(100009L * WorkMeter.COMPILE_BYTE));
+    }
   }
 
   @Test

@@ -479,8 +479,8 @@ public final class ModuleLib {
 			return "(path searcher)";
 		}
 
-		private LuaFunction loaderForPath(ByteString path) throws LoaderException {
-			return BasicLib.loadTextChunkFromFile(fileSystem, loader, path.toString(), BasicLib.Load.DEFAULT_MODE, env);
+		private LuaFunction loaderForPath(ExecutionContext context, ByteString path) throws LoaderException {
+			return BasicLib.loadTextChunkFromFile(context, fileSystem, loader, path.toString(), BasicLib.Load.DEFAULT_MODE, env);
 		}
 
 		@Override
@@ -502,7 +502,7 @@ public final class ModuleLib {
 				if (Files.isReadable(p)) {
 					final LuaFunction fn;
 					try {
-						fn = loaderForPath(s);
+						fn = loaderForPath(context, s);
 					}
 					catch (LoaderException ex) {
 						throw new LuaRuntimeException("error loading module '" + modName + "' from file '" + s + "'"
