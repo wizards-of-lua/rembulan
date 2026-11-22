@@ -1,7 +1,3 @@
-plugins {
-  id 'ca.coglinc2.javacc' version '3.0.0'
-}
-
 description = 'Rembulan Compiler'
 
 java {
@@ -10,31 +6,47 @@ java {
   }
 }
 
+configurations {
+  javacc
+}
+
+// The parser is generated from src/main/javacc/Parser.jj by JavaCC.
+def javaccInput = file('src/main/javacc/Parser.jj')
+def javaccOutputRoot = layout.buildDirectory.dir('generated/javacc')
+
+def compileJavacc = tasks.register('compileJavacc', JavaExec) {
+  description = 'Generates the parser from Parser.jj.'
+  classpath = configurations.javacc
+  mainClass = 'javacc'
+  def outputDir = javaccOutputRoot.map { it.dir('net/sandius/rembulan/parser') }
+  inputs.file(javaccInput)
+  outputs.dir(javaccOutputRoot)
+  doFirst {
+    def root = javaccOutputRoot.get().asFile
+    root.deleteDir()
+    outputDir.get().asFile.mkdirs()
+  }
+  argumentProviders.add({
+    ["-OUTPUT_DIRECTORY=${outputDir.get().asFile}".toString(), javaccInput.path]
+  } as CommandLineArgumentProvider)
+}
+
 sourceSets {
   main {
     java {
-      srcDir compileJavacc.outputDirectory
+      srcDir(compileJavacc)
     }
   }
 }
 
 tasks.named('eclipseClasspath') {
-  dependsOn tasks.named('compileJavacc')
-}
-
-compileJavacc {
-  inputDirectory  = file('src/main/javacc')
-  outputDirectory = file("$buildDir/generated/javacc/net/sandius/rembulan/parser")
-}
-
-tasks.named('sourceJar') {
-  dependsOn tasks.named('compileJavacc')
+  dependsOn compileJavacc
 }
 
 dependencies {
+  javacc 'net.java.dev.javacc:javacc:6.1.2'
   implementation project(':rembulan-runtime')
   implementation 'org.ow2.asm:asm:9.7.1'
   implementation 'org.ow2.asm:asm-analysis:9.7.1'
   implementation 'org.ow2.asm:asm-util:9.7.1'
 }
-
