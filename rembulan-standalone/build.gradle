@@ -17,3 +17,11 @@ dependencies {
   implementation 'jline:jline:2.14.6'
 }
 
+
+processResources {
+  // the version the console reports (Constants.VERSION)
+  inputs.property 'version', project.version
+  filesMatching('**/version.properties') {
+    expand(version: project.version)
+  }
+}

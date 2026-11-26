@@ -16,12 +16,16 @@
 
 package net.sandius.rembulan.standalone;
 
+import java.io.IOException;
+import java.io.InputStream;
+import java.util.Properties;
+
 abstract class Constants {
 
 	/**
-	 * Version reported in the version string.
+	 * Version reported in the version string: the version of the build.
 	 */
-	public static final String VERSION = "0.1-SNAPSHOT";
+	public static final String VERSION = buildVersion();
 
 	/**
 	 * Default prompt for the first input line in interactive mode.
@@ -110,6 +114,19 @@ abstract class Constants {
 
 	private Constants() {
 		// not to be instantiated or extended
+	}
+
+	private static String buildVersion() {
+		Properties properties = new Properties();
+		try (InputStream in = Constants.class.getResourceAsStream("version.properties")) {
+			if (in != null) {
+				properties.load(in);
+			}
+		}
+		catch (IOException ex) {
+			// no version then
+		}
+		return properties.getProperty("version", "(unknown version)");
 	}
 
 }

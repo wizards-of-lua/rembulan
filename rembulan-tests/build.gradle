@@ -48,3 +48,8 @@ tasks.withType(JavaCompile).configureEach {
   options.encoding = 'UTF-8'
 }
 
+
+tasks.named('test') {
+  // for Constants_VersionTest: the version the console reports is the build's
+  systemProperty 'rembulan.version', project.version
+}
