@@ -131,9 +131,30 @@ class LabelResolutionTransformer extends Transformer {
 
 	@Override
 	public Block transform(Block block) {
+		return transform(block, true);
+	}
+
+	/**
+	 * The condition of a {@code repeat} loop sees the locals of its body, so labels at the end of
+	 * the body are still in their scope (as in PUC-Lua, where {@code until} doesn't end the block
+	 * for a label).
+	 */
+	@Override
+	public BodyStatement transform(RepeatUntilStatement node) {
+		return node.update(
+				node.condition().accept(this),
+				transform(node.block(), false));
+	}
+
+	/**
+	 * Resolves the labels of a block. If {@code localsEndBeforeTrailingLabels}, the locals of the
+	 * block are out of scope after its last statement that is not a label or goto, so that a goto
+	 * to a label at the end of a block doesn't jump into their scope.
+	 */
+	private Block transform(Block block, boolean localsEndBeforeTrailingLabels) {
 		enterBlock();
 
-		Statement localScopeEnd = lastNonVoidStatement(block);
+		Statement localScopeEnd = localsEndBeforeTrailingLabels ? lastNonVoidStatement(block) : null;
 
 		List<BodyStatement> stats = new ArrayList<>();
 		for (BodyStatement bs : block.statements()) {
