@@ -236,6 +236,8 @@ public final class ModuleLib {
 		t.rawset("searchers", searchers);
 		if (fileSystem != null) t.rawset("searchpath", searchpath(fileSystem));
 		t.rawset("path", path);
+		// no C loader, but the field is there, as the Lua manual defines it
+		t.rawset("cpath", ByteString.empty());
 
 		// install into the global environment
 		env.rawset("package", t);
