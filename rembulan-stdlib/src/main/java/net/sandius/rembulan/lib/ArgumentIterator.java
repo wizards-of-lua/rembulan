@@ -663,6 +663,17 @@ public class ArgumentIterator implements Iterator<Object> {
 	}
 
 	/**
+	 * Advances the current position past a {@code nil} argument, if that is what is there: an
+	 * optional argument given as {@code nil} stands for its default and is consumed like any other,
+	 * so that the arguments after it are read from their own positions.
+	 */
+	private void skipNil() {
+		if (hasNext() && peek() == null) {
+			skip();
+		}
+	}
+
+	/**
 	 * If there is an argument {@code o} at the current position, returns the
 	 * {@linkplain Conversions#booleanValueOf(Object) boolean value} of {@code o} and
 	 * advances the current position. Otherwise, returns {@code defaultValue} (without
@@ -682,7 +693,7 @@ public class ArgumentIterator implements Iterator<Object> {
 	 * If {@code o} has an integer value, returns the integer value and advances the
 	 * current position. If {@code o} has no integer value, throws a {@link BadArgumentException}.
 	 * Otherwise (i.e., if there is no argument at the current position or if {@code o} is
-	 * {@code null}), returns {@code defaultValue} without advancing the current position.
+	 * {@code null}), returns {@code defaultValue}; a {@code null} argument is consumed.
 	 *
 	 * @param defaultValue  the default value
 	 * @return  the integer value of the argument at the current position,
@@ -693,7 +704,11 @@ public class ArgumentIterator implements Iterator<Object> {
 	 *                               position and it has no integer value
 	 */
 	public long nextOptionalInteger(long defaultValue) {
-		return hasNext() && peek() != null ? nextInteger() : defaultValue;
+		if (hasNext() && peek() != null) {
+			return nextInteger();
+		}
+		skipNil();
+		return defaultValue;
 	}
 
 	/**
@@ -702,7 +717,7 @@ public class ArgumentIterator implements Iterator<Object> {
 	 * If {@code o} has a float value, returns the float value and advances the
 	 * current position. If {@code o} has no float value, throws a {@link BadArgumentException}.
 	 * Otherwise (i.e., if there is no argument at the current position or if {@code o} is
-	 * {@code null}), returns {@code defaultValue} without advancing the current position.
+	 * {@code null}), returns {@code defaultValue}; a {@code null} argument is consumed.
 	 *
 	 * @param defaultValue  the default value
 	 * @return  the float value of the argument at the current position,
@@ -713,7 +728,11 @@ public class ArgumentIterator implements Iterator<Object> {
 	 *                               position and it has no float value
 	 */
 	public double nextOptionalFloat(double defaultValue) {
-		return hasNext() && peek() != null ? nextFloat() : defaultValue;
+		if (hasNext() && peek() != null) {
+			return nextFloat();
+		}
+		skipNil();
+		return defaultValue;
 	}
 
 	/**
@@ -724,7 +743,7 @@ public class ArgumentIterator implements Iterator<Object> {
 	 * If {@code o} has no integer value or the integer value does not fit in 32 bits,
 	 * throws a {@link BadArgumentException}.
 	 * Otherwise (i.e., if there is no argument at the current position or if {@code o} is
-	 * {@code null}), returns {@code defaultValue} without advancing the current position.
+	 * {@code null}), returns {@code defaultValue}; a {@code null} argument is consumed.
 	 *
 	 * @param defaultValue  the default value
 	 * @return  the integer value of the argument at the current position truncated to
@@ -736,7 +755,11 @@ public class ArgumentIterator implements Iterator<Object> {
 	 *                               integer value that does not fit into a Java {@code int}
 	 */
 	public int nextOptionalInt(int defaultValue) {
-		return hasNext() && peek() != null ? nextInt() : defaultValue;
+		if (hasNext() && peek() != null) {
+			return nextInt();
+		}
+		skipNil();
+		return defaultValue;
 	}
 
 	/**
@@ -745,7 +768,7 @@ public class ArgumentIterator implements Iterator<Object> {
 	 * If {@code o} has a string value, returns the string value and advances the
 	 * current position. If {@code o} has no string value, throws a {@link BadArgumentException}.
 	 * Otherwise (i.e., if there is no argument at the current position or if {@code o} is
-	 * {@code null}), returns {@code defaultValue} without advancing the current position.
+	 * {@code null}), returns {@code defaultValue}; a {@code null} argument is consumed.
 	 *
 	 * @param defaultValue  the default value, may be {@code null}
 	 * @return  the string value of the argument at the current position,
@@ -756,15 +779,19 @@ public class ArgumentIterator implements Iterator<Object> {
 	 *                               position and it has no string value
 	 */
 	public ByteString nextOptionalString(ByteString defaultValue) {
-		return hasNext() && peek() != null ? nextString() : defaultValue;
+		if (hasNext() && peek() != null) {
+			return nextString();
+		}
+		skipNil();
+		return defaultValue;
 	}
 
 	/**
 	 * If there is a non-{@code null} argument {@code o} and {@code o} is a function, returns
 	 * the function and advances the current position. If {@code o} is not a function,
 	 * throws a {@link BadArgumentException}. Otherwise (i.e., if there is no argument at
-	 * the current position or if {@code o} is {@code null}), returns {@code defaultValue}
-	 * without advancing the current position.
+	 * the current position or if {@code o} is {@code null}), returns {@code defaultValue};
+	 * a {@code null} argument is consumed.
 	 *
 	 * @param defaultValue  the default value, may be {@code null}
 	 * @return  the function at the current position,
@@ -775,15 +802,19 @@ public class ArgumentIterator implements Iterator<Object> {
 	 *                               position and it is not a function
 	 */
 	public LuaFunction nextOptionalFunction(LuaFunction defaultValue) {
-		return hasNext() && peek() != null ? nextFunction() : defaultValue;
+		if (hasNext() && peek() != null) {
+			return nextFunction();
+		}
+		skipNil();
+		return defaultValue;
 	}
 
 	/**
 	 * If there is a non-{@code null} argument {@code o} and {@code o} is a table, returns
 	 * the table and advances the current position. If {@code o} is not a table,
 	 * throws a {@link BadArgumentException}. Otherwise (i.e., if there is no argument at
-	 * the current position or if {@code o} is {@code null}), returns {@code defaultValue}
-	 * without advancing the current position.
+	 * the current position or if {@code o} is {@code null}), returns {@code defaultValue};
+	 * a {@code null} argument is consumed.
 	 *
 	 * @param defaultValue  the default value, may be {@code null}
 	 * @return  the table at the current position,
@@ -794,15 +825,19 @@ public class ArgumentIterator implements Iterator<Object> {
 	 *                               position and it is not a table
 	 */
 	public Table nextOptionalTable(Table defaultValue) {
-		return hasNext() && peek() != null ? nextTable() : defaultValue;
+		if (hasNext() && peek() != null) {
+			return nextTable();
+		}
+		skipNil();
+		return defaultValue;
 	}
 
 	/**
 	 * If there is a non-{@code null} argument {@code o} and {@code o} is a coroutine, returns
 	 * the coroutine and advances the current position. If {@code o} is not a coroutine,
 	 * throws a {@link BadArgumentException}. Otherwise (i.e., if there is no argument at
-	 * the current position or if {@code o} is {@code null}), returns {@code defaultValue}
-	 * without advancing the current position.
+	 * the current position or if {@code o} is {@code null}), returns {@code defaultValue};
+	 * a {@code null} argument is consumed.
 	 *
 	 * @param defaultValue  the default value, may be {@code null}
 	 * @return  the coroutine at the current position,
@@ -813,7 +848,11 @@ public class ArgumentIterator implements Iterator<Object> {
 	 *                               position and it is not a coroutine
 	 */
 	public Coroutine nextOptionalCoroutine(Coroutine defaultValue) {
-		return hasNext() && peek() != null ? nextCoroutine() : defaultValue;
+		if (hasNext() && peek() != null) {
+			return nextCoroutine();
+		}
+		skipNil();
+		return defaultValue;
 	}
 
 }
