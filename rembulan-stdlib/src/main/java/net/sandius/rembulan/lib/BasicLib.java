@@ -1729,11 +1729,12 @@ public final class BasicLib {
 					resuming = false;
 
 					Object o = context.getReturnBuffer().get0();
-					if (o == null) {
+					ByteString s = o != null ? Conversions.stringValueOf(o) : null;
+					if (o == null || (s != null && s.isEmpty())) {
+						// "A return of an empty string, nil, or no value signals the end of the chunk."
 						chunkText = bld.toByteString();
 					}
 					else {
-						ByteString s = Conversions.stringValueOf(o);
 						if (s != null) {
 							WorkMeter.chargeBytes(context, s.lengthEstimate());
 							bld.append(s);
