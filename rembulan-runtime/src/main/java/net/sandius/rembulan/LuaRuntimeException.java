@@ -21,24 +21,38 @@ package net.sandius.rembulan;
  * attached to them.
  *
  * <p>To retrieve the error object, use {@link #getErrorObject()}.</p>
+ *
+ * <p>As in PUC-Lua, a string error object has the position of the error in front of it
+ * ({@code "chunk:line: message"}), like a message of {@code luaL_error}: for an error of an
+ * operation in a Lua function, the position in that function; for an error raised by a function
+ * written in Java, the position in the Lua function that called it (see {@code ErrorPosition}).
+ * The position is taken from the stack trace when the error object is first retrieved. An error
+ * object that must stay as it is, like {@code lua_error}'s, is made with
+ * {@link #ofErrorObject(Object)}.</p>
  */
 public class LuaRuntimeException extends RuntimeException {
 
 	private final Object errorObject;
+	private final boolean withPosition;
 
-	private LuaRuntimeException(Throwable cause, Object errorObject) {
+	private Object errorObjectWithPosition;
+	private boolean positionAdded;
+
+	private LuaRuntimeException(Throwable cause, Object errorObject, boolean withPosition) {
 		super(cause);
 		this.errorObject = errorObject;
+		this.withPosition = withPosition;
 	}
 
 	/**
 	 * Constructs a new {@code LuaRuntimeException} with {@code errorObject} as its
-	 * error object. {@code errorObject} may be {@code null}.
+	 * error object. {@code errorObject} may be {@code null}. If it is a string, the position
+	 * of the error is put in front of it, if known.
 	 *
 	 * @param errorObject  the error object, may be {@code null}
 	 */
 	public LuaRuntimeException(Object errorObject) {
-		this(null, errorObject);
+		this(null, errorObject, true);
 	}
 
 	/**
@@ -51,7 +65,19 @@ public class LuaRuntimeException extends RuntimeException {
 	 * @param cause  the cause of this error, may be {@code null}
 	 */
 	public LuaRuntimeException(Throwable cause) {
-		this(cause, null);
+		this(cause, null, false);
+	}
+
+	/**
+	 * Returns a new {@code LuaRuntimeException} with {@code errorObject} as its error object,
+	 * exactly as it is: no position is put in front of a string (e.g. for {@code error(msg, 0)},
+	 * or an error object raised again).
+	 *
+	 * @param errorObject  the error object, may be {@code null}
+	 * @return  a new {@code LuaRuntimeException} with this error object
+	 */
+	public static LuaRuntimeException ofErrorObject(Object errorObject) {
+		return new LuaRuntimeException(null, errorObject, false);
 	}
 
 	/**
@@ -65,6 +91,26 @@ public class LuaRuntimeException extends RuntimeException {
 	}
 
 	/**
+	 * Returns the error object attached to this exception without the position of the error in
+	 * front of a string, e.g. to use its message in the message of another error.
+	 *
+	 * @return  the error object attached to this exception (possibly {@code null}), without
+	 *          position
+	 */
+	public Object getErrorObjectWithoutPosition() {
+		Throwable cause = getCause();
+		if (cause instanceof LuaRuntimeException) {
+			return ((LuaRuntimeException) cause).getErrorObjectWithoutPosition();
+		}
+		else if (cause != null) {
+			return cause.getMessage();
+		}
+		else {
+			return errorObject;
+		}
+	}
+
+	/**
 	 * Returns the error object attached to this exception. The error object may be {@code null}.
 	 *
 	 * @return  the error object attached to this exception (possibly {@code null})
@@ -74,8 +120,15 @@ public class LuaRuntimeException extends RuntimeException {
 		if (cause != null) {
 			return Conversions.toErrorObject(cause);
 		}
-		else {
+		else if (!withPosition) {
 			return errorObject;
+		}
+		else {
+			if (!positionAdded) {
+				errorObjectWithPosition = ErrorPosition.addTo(errorObject, getStackTrace());
+				positionAdded = true;
+			}
+			return errorObjectWithPosition;
 		}
 	}
 

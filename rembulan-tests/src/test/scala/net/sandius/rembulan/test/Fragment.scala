@@ -219,7 +219,10 @@ object FragmentExpectations {
 
           for (messageMatcher <- optExpectMessage) {
             val actualMessage = ex.getMessage
-            if (!messageMatcher.matches(actualMessage)) {
+            // as in PUC-Lua, error messages have the position of the error in front ("test:3: ");
+            // the expected messages leave it out (the positions are tested in ErrorPositionTest)
+            val withoutPosition = Option(actualMessage).map(_.replaceFirst("^test:\\d+: ", "")).orNull
+            if (!messageMatcher.matches(actualMessage) && !messageMatcher.matches(withoutPosition)) {
               onFail()
               spec.fail("Error message mismatch: expected \"" + messageMatcher + "\", got \"" + actualMessage + "\"")
             }

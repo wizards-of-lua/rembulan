@@ -560,7 +560,8 @@ public final class Conversions {
 	 *
 	 * <p>If {@code t} is a {@link LuaRuntimeException}, the result of this operation
 	 * is the result of its {@link LuaRuntimeException#getErrorObject()}. Otherwise,
-	 * the result is {@link Throwable#getMessage()}.
+	 * the result is {@link Throwable#getMessage()}, with the position of the error in front of
+	 * it if known (as for a string error object of a {@code LuaRuntimeException}).
 	 *
 	 * @param t  throwable to convert to error object, must not be {@code null}
 	 * @return error object represented by {@code t}
@@ -576,7 +577,8 @@ public final class Conversions {
 			return "stack overflow";
 		}
 		else {
-			return t.getMessage();
+			// e.g. a bad argument of a library function: as luaL_error, with the position
+			return ErrorPosition.addTo(t.getMessage(), t.getStackTrace());
 		}
 	}
 

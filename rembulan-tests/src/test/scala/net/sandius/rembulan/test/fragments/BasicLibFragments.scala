@@ -216,7 +216,7 @@ object BasicLibFragments extends FragmentBundle with FragmentExpectations with O
         """
       }
       // FIXME: the error object should actually be "stdin:3: kaboom"
-      PCallCatchesErrorInACallMetamethod in thisContext succeedsWith (false, "kaboom")
+      PCallCatchesErrorInACallMetamethod in thisContext succeedsWith (false, "test:3: kaboom")
 
     }
 
@@ -251,7 +251,7 @@ object BasicLibFragments extends FragmentBundle with FragmentExpectations with O
 
       program ("error(1)") failsWithLuaError (java.lang.Long.valueOf(1))
       program ("error(1.0)") failsWithLuaError (java.lang.Double.valueOf(1.0))
-      program ("error(\"boom\")") failsWithLuaError "boom"
+      program ("error(\"boom\")") failsWithLuaError "test:1: boom"
 
       program ("return pcall(error)") succeedsWith (false, null)
 

@@ -661,7 +661,7 @@ object TableLibFragments extends FragmentBundle with FragmentExpectations with O
         program ("""return table.unpack(setmetatable({}, { __len = 3 }))""") failsWith "attempt to call a number value"
 
         program ("""return table.unpack(setmetatable({}, { __len = function() error("boom") end }), -1, 1)""") succeedsWith (null, null, null)
-        program ("""return table.unpack(setmetatable({}, { __len = function() error("boom") end }), -1)""") failsWithLuaError "boom"
+        program ("""return table.unpack(setmetatable({}, { __len = function() error("boom") end }), -1)""") failsWithLuaError "test:1: boom"
 
         program ("""return table.unpack(setmetatable({}, { __len = function() return 2 end }), -1)""") succeedsWith (null, null, null, null)
         program ("""return table.unpack(setmetatable({}, { __len = function() return "2" end }), -1)""") succeedsWith (null, null, null, null)

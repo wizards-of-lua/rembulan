@@ -1243,9 +1243,17 @@ public final class BasicLib {
 
 		@Override
 		protected void invoke(ExecutionContext context, ArgumentIterator args) throws ResolvedControlThrowable {
-			// TODO: handle levels
 			Object arg1 = args.nextOptionalAny(null);
-			throw new LuaRuntimeException(arg1);
+			long level = args.nextOptionalInteger(1L);
+			if (level == 1 && (arg1 instanceof ByteString || arg1 instanceof String)) {
+				// with the position of the function that called error, as in PUC-Lua
+				throw new LuaRuntimeException(arg1);
+			}
+			else {
+				// level 0: no position; level 2 and higher: the position of a calling function is
+				// not known after it was resumed (it is no longer on the Java stack), so none
+				throw LuaRuntimeException.ofErrorObject(arg1);
+			}
 		}
 
 	}
@@ -1886,7 +1894,8 @@ public final class BasicLib {
 				fn = loadTextChunkFromFile(context, fileSystem, loader, fileName.toString(), Load.DEFAULT_MODE, env);
 			}
 			catch (LoaderException ex) {
-				throw new LuaRuntimeException(ex.getLuaStyleErrorMessage());
+				// the message has its position already (as lua_error in PUC-Lua's dofile)
+				throw LuaRuntimeException.ofErrorObject(ex.getLuaStyleErrorMessage());
 			}
 
 			try {

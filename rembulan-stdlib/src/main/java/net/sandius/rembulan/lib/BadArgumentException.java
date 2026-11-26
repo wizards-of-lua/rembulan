@@ -16,6 +16,9 @@
 
 package net.sandius.rembulan.lib;
 
+import net.sandius.rembulan.Conversions;
+import net.sandius.rembulan.LuaRuntimeException;
+
 /**
  * Thrown to indicate that an illegal argument was passed to a library function.
  */
@@ -83,7 +86,7 @@ public class BadArgumentException extends IllegalArgumentException {
 
 		String msg = message;
 		if (msg == null && getCause() != null) {
-			msg = getCause().getMessage();
+			msg = messageOf(getCause());
 		}
 
 		if (msg != null) {
@@ -91,6 +94,17 @@ public class BadArgumentException extends IllegalArgumentException {
 		}
 
 		return bld.toString();
+	}
+
+	/** The message of {@code cause}, without the position of the error (it is part of this one). */
+	private static String messageOf(Throwable cause) {
+		if (cause instanceof LuaRuntimeException) {
+			Object errorObject = ((LuaRuntimeException) cause).getErrorObjectWithoutPosition();
+			return Conversions.toHumanReadableString(errorObject).toString();
+		}
+		else {
+			return cause.getMessage();
+		}
 	}
 
 }

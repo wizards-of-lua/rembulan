@@ -9,6 +9,7 @@ import java.nio.file.NotDirectoryException;
 import java.util.HashMap;
 import java.util.Map;
 
+import net.sandius.rembulan.Conversions;
 import net.sandius.rembulan.LuaRuntimeException;
 import net.sandius.rembulan.runtime.ReturnBuffer;
 
@@ -78,6 +79,10 @@ final class IoErrors {
       return "Directory not empty";
     } else if (ex instanceof FileSystemException && ((FileSystemException) ex).getReason() != null) {
       return ((FileSystemException) ex).getReason();
+    } else if (ex instanceof LuaRuntimeException) {
+      // e.g. a closed file: its message, without the position (the new error gets its own)
+      Object errorObject = ((LuaRuntimeException) ex).getErrorObjectWithoutPosition();
+      return Conversions.toHumanReadableString(errorObject).toString();
     } else {
       String message = ex.getMessage();
       return message != null ? message : ex.getClass().getSimpleName();

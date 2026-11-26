@@ -290,7 +290,8 @@ public class LibraryWorkTicksTest extends TestBase {
     // 2,000,000 bytes: 3333 ticks, charged before the copy
     Object[] actual = run(new Scheduler(1000),
         "local a = ... return pcall(function() return a .. a end)", 1000000);
-    assertThat(actual).isEqualTo(new Object[] {false, STOPPED});
+    // an operation of the Lua function: the error has its position (#60)
+    assertThat(actual).isEqualTo(new Object[] {false, "test:1: " + STOPPED});
   }
 
   @Test
@@ -420,7 +421,10 @@ public class LibraryWorkTicksTest extends TestBase {
     for (String call : calls) {
       Object[] actual = run(new Scheduler(1000),
           "local s, t = ... return pcall(function() return " + call + " end)", MB, MB);
-      assertThat(actual).as(call).isEqualTo(new Object[] {false, STOPPED});
+      // an operator of the Lua function has its position (#60); a library function called in
+      // a tail call has none (the calling function has returned)
+      String expected = call.startsWith("s ") ? "test:1: " + STOPPED : STOPPED;
+      assertThat(actual).as(call).isEqualTo(new Object[] {false, expected});
     }
   }
 
