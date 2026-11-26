@@ -77,7 +77,7 @@ repositories {
 }
 
 dependencies {
-    implementation 'net.wizardsoflua.rembulan:rembulan-runtime:0.5.5'
+    implementation 'net.wizardsoflua.rembulan:rembulan-runtime:0.6.0'
 }
 ```
 
@@ -85,7 +85,7 @@ To include the **compiler** as a dependency:
 
 ```groovy
 dependencies {
-    implementation 'net.wizardsoflua.rembulan:rembulan-compiler:0.5.5'
+    implementation 'net.wizardsoflua.rembulan:rembulan-compiler:0.6.0'
 }
 ```
 
@@ -93,7 +93,7 @@ To include the **standard library** as a dependency:
 
 ```groovy
 dependencies {
-    implementation 'net.wizardsoflua.rembulan:rembulan-stdlib:0.5.5'
+    implementation 'net.wizardsoflua.rembulan:rembulan-stdlib:0.6.0'
 }
 ```
 
