@@ -24,6 +24,7 @@ dependencies {
   implementation project(':rembulan-runtime')
   implementation project(':rembulan-compiler')
   implementation project(':rembulan-stdlib')
+  testImplementation project(':rembulan-standalone')
 
   testImplementation 'org.scala-lang:scala-library:2.11.12'
   testImplementation 'junit:junit:4.11'

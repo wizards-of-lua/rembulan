@@ -21,7 +21,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.net.URL;
 import java.net.URLClassLoader;
-import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.Objects;
@@ -33,9 +33,9 @@ final class Utils {
 	}
 
 	public static String bytesToString(byte[] bytes) {
-		// Lua likes clean 8-bit input; FIXME: is ISO-8859-1 okay?
-		Charset charset = Charset.forName("ISO-8859-1");
-		return new String(bytes, charset);
+		// UTF-8, as load treats its strings: the compiler encodes string literals as UTF-8, so
+		// decoding as ISO-8859-1 encoded every non-ASCII character twice
+		return new String(bytes, StandardCharsets.UTF_8);
 	}
 
 	public static String readFile(String fileName) throws IOException {
