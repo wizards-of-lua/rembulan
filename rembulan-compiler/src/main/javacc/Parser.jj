@@ -24,6 +24,13 @@ import static java.util.Collections.*;
 
 public class Parser {
 
+	/**
+	 * Whether the expression the last {@code PrefixExpr} returned is a parenthesised expression:
+	 * a value, not a variable, even if it is a name ({@code (a) = 1} is no assignment), since
+	 * {@code Exprs.paren} drops the parentheses of a single value.
+	 */
+	private boolean parenthesised;
+
 	private static SourceInfo src(Token t) {
 		return new SourceInfo(t.beginLine, t.beginColumn);
 	}
@@ -517,19 +524,27 @@ Expr PrefixExpr() :
 {
 	Expr e;
 	PostfixOp op;
+	boolean paren;
 }
 {
-	e=VarExpr() (LOOKAHEAD(2) op=__PostfixOp() { e=op.on(e); })*  { return e; }
+	(
+		e=VarExpr() { paren = false; }
+	|	<PAREN_OPEN> e=Expr() <PAREN_CLOSE>  { e = Exprs.paren(e); paren = true; }
+	)
+	(LOOKAHEAD(2) op=__PostfixOp() { e=op.on(e); paren = false; })*
+	{
+		// set last: the expression in the parentheses has set it too
+		parenthesised = paren;
+		return e;
+	}
 }
 
 Expr VarExpr() :
 {
 	SourceElement<Name> sn;
-	Expr e;
 }
 {
 	sn=SrcName()  { return Exprs.var(sn.sourceInfo(), sn.element()); }
-|	<PAREN_OPEN> e=Expr() <PAREN_CLOSE>  { return Exprs.paren(e); }
 }
 
 PostfixOp __PostfixOp() :
@@ -544,17 +559,24 @@ PostfixOp __PostfixOp() :
 BodyStatement AssignOrCall() :
 {
 	Expr e;
+	boolean isVariable;
+	Token next;
 	AssignRest ar;
 }
 {
 	e=PrefixExpr()
+		{
+			isVariable = e instanceof LValueExpr && !parenthesised;
+			next = getToken(1);
+		}
 	(ar=AssignOrCallRest()
 		{
-			if (e instanceof LValueExpr) {
+			if (isVariable) {
 				return ar.prepend((LValueExpr) e);
 			}
 			else {
-				throw ParseExceptions.at("lvalue expected", e.line(), false);
+				// as in PUC-Lua: the error is at the token after the target
+				throw ParseExceptions.near("syntax error", next);
 			}
 		}
 	)?
@@ -596,8 +618,16 @@ LValueExpr LValue() :
 //	LOOKAHEAD(2) sn=SrcName()  { return Exprs.var(sn.sourceInfo(), sn.element()); }
 //|	e=PrefixExpr() fa=__FieldAccessOp()  { return fa.on(e); }
 
-	// FIXME: restrict this using syntactic rule instead
-	e=PrefixExpr()  { if (e instanceof LValueExpr) return (LValueExpr) e; else throw new ParseException("lvalue expected"); }
+	e=PrefixExpr()
+		{
+			if (e instanceof LValueExpr && !parenthesised) {
+				return (LValueExpr) e;
+			}
+			else {
+				// as in PUC-Lua: the error is at the token after the target
+				throw ParseExceptions.near("syntax error", getToken(1));
+			}
+		}
 }
 
 SourceElement<List<Expr>> Args() :
