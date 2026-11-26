@@ -138,7 +138,8 @@ public abstract class IoFile extends DefaultUserdata {
    */
   static class LinesIterator extends AbstractFunctionAnyArg {
 
-    private final Read read = new Read();
+    // as in PUC-Lua: a bad format is argument #2 of the "for iterator"
+    private final Read read = new Read("for iterator", 2);
     private final IoFile file;
     private final Object[] readArgs;
     private final boolean closeAtEof;
@@ -169,7 +170,7 @@ public abstract class IoFile extends DefaultUserdata {
         try {
           file.close();
         } catch (Exception ex) {
-          throw IoLib.newLuaRuntimeException(ex);
+          throw IoErrors.error(ex);
         }
       }
       result.setTo();
@@ -202,9 +203,9 @@ public abstract class IoFile extends DefaultUserdata {
         f.checkClosed();
         f.close();
       } catch (ClosedFileException ex) {
-        throw IoLib.newLuaRuntimeException(ex);
+        throw IoErrors.error(ex);
       } catch (Exception ex) {
-        IoLib.setErrorMessage(context.getReturnBuffer(), ex);
+        IoErrors.setFailure(context.getReturnBuffer(), ex, null);
         return;
       }
       context.getReturnBuffer().setTo(true);
@@ -226,9 +227,9 @@ public abstract class IoFile extends DefaultUserdata {
       try {
         f.flush();
       } catch (ClosedFileException ex) {
-        throw IoLib.newLuaRuntimeException(ex);
+        throw IoErrors.error(ex);
       } catch (Exception ex) {
-        IoLib.setErrorMessage(context.getReturnBuffer(), ex);
+        IoErrors.setFailure(context.getReturnBuffer(), ex, null);
         return;
       }
       context.getReturnBuffer().setTo(true);
@@ -250,7 +251,7 @@ public abstract class IoFile extends DefaultUserdata {
       try {
         f.checkClosed();
       } catch (Exception ex) {
-        throw IoLib.newLuaRuntimeException(ex);
+        throw IoErrors.error(ex);
       }
       context.getReturnBuffer().setTo(new LinesIterator(f, args.copyRemaining(), false));
     }
@@ -261,9 +262,33 @@ public abstract class IoFile extends DefaultUserdata {
 
     private static final ByteString DEFAULT_SPEC = ByteString.of("*l");
 
+    private final String name;
+    private final int firstFormatArgument;
+
+    /**
+     * {@code file:read} and {@code io.read}: the first format is argument #1 (a method doesn't
+     * count {@code self}).
+     */
+    Read() {
+      this("read", 1);
+    }
+
+    /**
+     * A read that reports a bad format as argument {@code firstFormatArgument} (the first
+     * format) and so on of the function {@code name}.
+     */
+    Read(String name, int firstFormatArgument) {
+      this.name = name;
+      this.firstFormatArgument = firstFormatArgument;
+    }
+
     @Override
     protected String name() {
-      return "read";
+      return name;
+    }
+
+    private BadArgumentException badFormat(int formatIndex, String message) {
+      return new BadArgumentException(firstFormatArgument + formatIndex, name(), message);
     }
 
     @Override
@@ -274,9 +299,16 @@ public abstract class IoFile extends DefaultUserdata {
       try {
         f.checkClosed();
         f.setReadMeter(WorkMeter.forReadBytes(context));
+        int formatIndex = -1;
         do {
+          formatIndex++;
           Object formatSpecfifier = args.nextOptionalAny(DEFAULT_SPEC);
-          Format format = Format.get(formatSpecfifier);
+          final Format format;
+          try {
+            format = Format.get(formatSpecfifier);
+          } catch (IllegalArgumentException ex) {
+            throw badFormat(formatIndex, "invalid format");
+          }
           final Object value;
           switch (format) {
             case NEXT_LINE:
@@ -296,7 +328,7 @@ public abstract class IoFile extends DefaultUserdata {
             case NUMBER_OF_CHARACTERS:
               Long len = Conversions.integerValueOf(formatSpecfifier);
               if (len == null) {
-                throw new IllegalArgumentException("number has no integer representation");
+                throw badFormat(formatIndex, "number has no integer representation");
               }
               value = f.readChunk(len);
               break;
@@ -309,14 +341,16 @@ public abstract class IoFile extends DefaultUserdata {
             break;
           }
         } while (args.hasNext());
+      } catch (BadArgumentException ex) {
+        throw ex;
       } catch (ClosedFileException | IllegalArgumentException ex) {
-        throw IoLib.newLuaRuntimeException(ex);
+        throw IoErrors.error(ex);
       } catch (LuaRuntimeException ex) {
         // e.g. the scheduler stopping a read that takes too long
         throw ex;
       } catch (Exception ex) {
         // e.g. reading a file opened for writing only
-        IoLib.setErrorMessage(context.getReturnBuffer(), ex);
+        IoErrors.setFailure(context.getReturnBuffer(), ex, null);
         return;
       } finally {
         f.setReadMeter(null);
@@ -371,9 +405,9 @@ public abstract class IoFile extends DefaultUserdata {
       try {
         position = file.seek(whence, offset);
       } catch (ClosedFileException ex) {
-        throw IoLib.newLuaRuntimeException(ex);
+        throw IoErrors.error(ex);
       } catch (Exception ex) {
-        IoLib.setErrorMessage(context.getReturnBuffer(), ex);
+        IoErrors.setFailure(context.getReturnBuffer(), ex, null);
         return;
       }
 
@@ -396,7 +430,7 @@ public abstract class IoFile extends DefaultUserdata {
       try {
         file.checkClosed();
       } catch (ClosedFileException ex) {
-        throw IoLib.newLuaRuntimeException(ex);
+        throw IoErrors.error(ex);
       }
       String mode = args.nextString().toString();
       if (!mode.equals("no") && !mode.equals("full") && !mode.equals("line")) {
@@ -432,9 +466,9 @@ public abstract class IoFile extends DefaultUserdata {
         } catch (ClosedFileException ex) {
           // Standard Lua 5.3 (checked on MacOS X) interrupts this function when the file
           // is closed.
-          throw IoLib.newLuaRuntimeException(ex);
+          throw IoErrors.error(ex);
         } catch (Exception ex) {
-          IoLib.setErrorMessage(context.getReturnBuffer(), ex);
+          IoErrors.setFailure(context.getReturnBuffer(), ex, null);
           return;
         }
       }

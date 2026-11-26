@@ -42,7 +42,6 @@ import java.io.OutputStream;
 import java.nio.channels.SeekableByteChannel;
 import java.nio.file.FileSystem;
 import java.nio.file.Files;
-import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
@@ -68,7 +67,6 @@ import net.sandius.rembulan.runtime.Dispatch;
 import net.sandius.rembulan.runtime.ExecutionContext;
 import net.sandius.rembulan.runtime.LuaFunction;
 import net.sandius.rembulan.runtime.ResolvedControlThrowable;
-import net.sandius.rembulan.runtime.ReturnBuffer;
 import net.sandius.rembulan.runtime.UnresolvedControlThrowable;
 
 /**
@@ -394,20 +392,6 @@ public final class IoLib {
     return FILE_WRITE;
   }
 
-  static void setErrorMessage(ReturnBuffer buffer, Exception ex) {
-    String exceptionName = ex.getClass().getSimpleName();
-    String exceptionMessage = ex.getMessage();
-    String message = exceptionName + (exceptionMessage == null ? "" : ": " + exceptionMessage);
-    buffer.setTo(null, message);
-  }
-
-  static LuaRuntimeException newLuaRuntimeException(Exception ex) {
-    String exceptionName = ex.getClass().getSimpleName();
-    String exceptionMessage = ex.getMessage();
-    String message = exceptionName + (exceptionMessage == null ? "" : ": " + exceptionMessage);
-    return new LuaRuntimeException(message);
-  }
-
   private final LuaFunction _close;
   private final LuaFunction _flush;
   private final LuaFunction _input;
@@ -569,26 +553,22 @@ public final class IoLib {
 
     Path path = fileSystem.getPath(filename.toString());
 
-    try {
-      switch (mode) {
-        case READ:
-          return track(openFileForRead(path));
-        case WRITE:
-          return track(openFileForWrite(path));
-        case APPEND:
-          return track(openFileForAppend(path));
-        case UPDATE_READ:
-          return track(openFileForUpdateRead(path));
-        case UPDATE_WRITE:
-          return track(openFileForUpdateWrite(path));
-        case UPDATE_APPEND:
-          return track(openFileForUpdateAppend(path));
-        default:
-          throw new UnsupportedOperationException(
-              "open file with mode " + mode + " is not supported right now");
-      }
-    } catch (NoSuchFileException ex) {
-      throw new NoSuchFileException(filename.toString());
+    switch (mode) {
+      case READ:
+        return track(openFileForRead(path));
+      case WRITE:
+        return track(openFileForWrite(path));
+      case APPEND:
+        return track(openFileForAppend(path));
+      case UPDATE_READ:
+        return track(openFileForUpdateRead(path));
+      case UPDATE_WRITE:
+        return track(openFileForUpdateWrite(path));
+      case UPDATE_APPEND:
+        return track(openFileForUpdateAppend(path));
+      default:
+        throw new UnsupportedOperationException(
+            "open file with mode " + mode + " is not supported right now");
     }
   }
 
@@ -747,11 +727,11 @@ public final class IoLib {
         Object arg = args.peek();
         IoFile f;
         if (arg instanceof ByteString) {
+          ByteString filename = args.nextString();
           try {
-            ByteString filename = args.nextString();
             f = lib.openFile(filename, Open.Mode.READ);
           } catch (Exception ex) {
-            throw newLuaRuntimeException(ex);
+            throw IoErrors.cannotOpen(filename.toString(), ex);
           }
         } else {
           f = args.nextUserdata(IoFile.typeName(), IoFile.class);
@@ -809,7 +789,7 @@ public final class IoLib {
         try {
           file.checkClosed();
         } catch (ClosedFileException ex) {
-          throw newLuaRuntimeException(ex);
+          throw IoErrors.error(ex);
         }
         closeAtEof = false;
       } else {
@@ -817,7 +797,7 @@ public final class IoLib {
         try {
           file = lib.openFile(filename, Open.Mode.READ);
         } catch (Exception ex) {
-          throw newLuaRuntimeException(ex);
+          throw IoErrors.cannotOpen(filename.toString(), ex);
         }
         closeAtEof = true;
       }
@@ -889,14 +869,14 @@ public final class IoLib {
       }
 
       if (mode == null) {
-        throw new BadArgumentException(1, name(), "invalid mode");
+        throw new BadArgumentException(2, name(), "invalid mode");
       }
 
       IoFile file = null;
       try {
         file = lib.openFile(filename, mode);
       } catch (Exception ex) {
-        setErrorMessage(context.getReturnBuffer(), ex);
+        IoErrors.setFailure(context.getReturnBuffer(), ex, filename.toString());
         return;
       }
 
@@ -927,11 +907,11 @@ public final class IoLib {
         Object arg = args.peek();
         IoFile f;
         if (arg instanceof ByteString) {
+          ByteString filename = args.nextString();
           try {
-            ByteString filename = args.nextString();
             f = lib.openFile(filename, Open.Mode.WRITE);
           } catch (Exception ex) {
-            throw newLuaRuntimeException(ex);
+            throw IoErrors.cannotOpen(filename.toString(), ex);
           }
         } else {
           f = args.nextUserdata(IoFile.typeName(), IoFile.class);
@@ -1041,9 +1021,9 @@ public final class IoLib {
         file = lib.openTempFile();
       } catch (UnsupportedOperationException ex) {
         // the runtime environment provides no temporary files
-        throw newLuaRuntimeException(ex);
+        throw IoErrors.error(ex);
       } catch (Exception ex) {
-        setErrorMessage(context.getReturnBuffer(), ex);
+        IoErrors.setFailure(context.getReturnBuffer(), ex, null);
         return;
       }
       context.getReturnBuffer().setTo(file);
