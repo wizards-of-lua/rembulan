@@ -302,7 +302,16 @@ SourceElement<StringLiteral> Str() :
 	StringBuilder bld;
 }
 {
-	t=<LITERAL_STRING>  { return new SourceElement(src(t), StringLiteral.fromString(t.image)); }
+	t=<LITERAL_STRING>
+		{
+			try {
+				return new SourceElement(src(t), StringLiteral.fromString(t.image));
+			}
+			catch (IllegalArgumentException ex) {
+				// an escape sequence out of range
+				throw ParseExceptions.near(ex.getMessage(), t);
+			}
+		}
 |	t=<LL_BEGIN> { bld = new StringBuilder(); } (u=<LL_TAIL> { bld.append(u.image); })+
 		{
 			// skip the closing bracket
@@ -523,7 +532,7 @@ BodyStatement AssignOrCall() :
 				return ar.prepend((LValueExpr) e);
 			}
 			else {
-				throw new ParseException("lvalue expected at line " + e.line());
+				throw ParseExceptions.at("lvalue expected", e.line(), false);
 			}
 		}
 	)?
@@ -534,7 +543,8 @@ BodyStatement AssignOrCall() :
 			return Statements.callStatement(ce.sourceInfo(), ce);
 		}
 		else {
-			throw new ParseException("function call expected at line " + e.line());
+			// as in PUC-Lua: the error is at the token after the expression
+			throw ParseExceptions.near("syntax error", getToken(1));
 		}
 	}
 }

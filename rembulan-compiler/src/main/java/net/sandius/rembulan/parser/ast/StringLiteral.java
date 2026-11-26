@@ -97,9 +97,6 @@ public class StringLiteral extends Literal {
 			if (c == '\\') {
 				// escaped character
 
-				// index of the '\\' character
-				final int oldPos = pos - 1;
-
 				c = stream.read();
 
 				if (decValueOf(c) != -1) {
@@ -127,7 +124,7 @@ public class StringLiteral extends Literal {
 					} while (rem > 0);
 
 					if (dec > 255) {
-						throw new IllegalArgumentException("decimal escape too large at index " + oldPos);
+						throw new IllegalArgumentException("decimal escape too large");
 					}
 
 					// TODO: update position
@@ -145,7 +142,7 @@ public class StringLiteral extends Literal {
 						int digit = hexValueOf(c);
 
 						if (digit == -1) {
-							throw new IllegalArgumentException("hexadecimal digit expected at index " + pos);
+							throw new IllegalArgumentException("hexadecimal digit expected");
 						}
 						else {
 							hex = (hex << 4) + digit;
@@ -156,7 +153,7 @@ public class StringLiteral extends Literal {
 				}
 				else if (c == 'u') {
 					if (stream.read() != '{') {
-						throw new IllegalArgumentException("missing '{' at index " + (oldPos + 2));
+						throw new IllegalArgumentException("missing '{'");
 					}
 
 					pos += 1;  // the opening '{' has been read
@@ -169,7 +166,7 @@ public class StringLiteral extends Literal {
 
 						int digit = hexValueOf(c);
 						if (digit == -1) {
-							throw new IllegalArgumentException("hexadecimal digit expected at index " + (pos - 1));
+							throw new IllegalArgumentException("hexadecimal digit expected");
 						}
 						value = digit;
 					}
@@ -181,13 +178,13 @@ public class StringLiteral extends Literal {
 						int digit = hexValueOf(c);
 						if (c != '}') {
 							if (digit == -1) {
-								throw new IllegalArgumentException("hexadecimal digit expected at index " + (pos - 1));
+								throw new IllegalArgumentException("hexadecimal digit expected");
 							}
 							else {
 								// as in PUC-Lua 5.3: values up to 0x10FFFF (5.4 allows up to 0x7FFFFFFF)
 								value = (value << 4) + digit;
 								if (value > 0x10FFFF) {
-									throw new IllegalArgumentException("UTF-8 value too large at index " + (pos - 1));
+									throw new IllegalArgumentException("UTF-8 value too large");
 								}
 							}
 						}
@@ -205,7 +202,7 @@ public class StringLiteral extends Literal {
 					if (c == '\r') {
 						// this must be a \r\n
 						if (stream.read() != '\n') {
-							throw new IllegalArgumentException("\\n expected at index " + oldPos);
+							throw new IllegalArgumentException("invalid escape sequence");
 						}
 						else {
 							pos += 1;
@@ -228,7 +225,7 @@ public class StringLiteral extends Literal {
 						case '\'': d = '\''; break;
 						case '"': d = '"'; break;
 						default:
-							throw new IllegalArgumentException("invalid escape sequence at index " + oldPos + " (\\" + c + ")");
+							throw new IllegalArgumentException("invalid escape sequence");
 					}
 					bld.append((byte) d);
 				}

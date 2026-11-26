@@ -56,7 +56,7 @@ class LabelResolutionTransformer extends Transformer {
 			// this was the top block
 			if (!s.pending.isEmpty()) {
 				GotoStatement gs = s.pending.get(0).statement;
-				throw new NameResolutionException("no visible label '" + gs.labelName().value() + "' for <goto> at line " + gs.line());
+				throw new NameResolutionException("no visible label '" + gs.labelName().value() + "' for <goto> at line " + gs.line(), gs.line());
 			}
 		}
 	}
@@ -219,7 +219,7 @@ class LabelResolutionTransformer extends Transformer {
 			{
 				LabelDef prevDef = definedHere.put(labelName, new LabelDef(node.line(), rl));
 				if (prevDef != null) {
-					throw new NameResolutionException("label '" + labelName.value() + "' already defined on line " + prevDef.line);
+					throw new NameResolutionException("label '" + labelName.value() + "' already defined on line " + prevDef.line, node.line());
 				}
 			}
 
@@ -235,7 +235,7 @@ class LabelResolutionTransformer extends Transformer {
 				if (gotoStat.labelName().equals(labelName)) {
 					if (!pg.localsSince.isEmpty()) {
 						Name localName = pg.localsSince.get(0);
-						throw new NameResolutionException("<goto " + labelName.value() + "> at line " + gotoStat.line() + " jumps into the scope of local '" + localName.value() + "'");
+						throw new NameResolutionException("<goto " + labelName.value() + "> at line " + gotoStat.line() + " jumps into the scope of local '" + localName.value() + "'", node.line());
 					}
 					else {
 						ResolvedLabel old = uses.put(gotoStat, rl);

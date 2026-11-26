@@ -136,11 +136,12 @@ class NameResolutionTransformer extends Transformer {
 		e = e.update(ps, transform(e.block()));
 		fnScope.leaveBlock();
 
+		int varargsLine = fnScope.firstVarargsLine();
 		FunctionVarInfo varInfo = leaveFunction();
 		e = e.with(varInfo);
 
 		if (!ps.isVararg() && varInfo.isVararg()) {
-			throw new IllegalStateException("cannot use '...' outside a vararg function");
+			throw new NameResolutionException("cannot use '...' outside a vararg function near '...'", varargsLine);
 		}
 
 		return e;
@@ -171,7 +172,7 @@ class NameResolutionTransformer extends Transformer {
 
 	@Override
 	public Expr transform(VarargsExpr e) {
-		fnScope.setVararg();
+		fnScope.setVararg(e.line());
 		return super.transform(e);
 	}
 

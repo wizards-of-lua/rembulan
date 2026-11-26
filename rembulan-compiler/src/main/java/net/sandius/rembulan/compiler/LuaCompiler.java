@@ -35,8 +35,10 @@ import net.sandius.rembulan.compiler.tf.CodeSimplifier;
 import net.sandius.rembulan.compiler.tf.ConstFolder;
 import net.sandius.rembulan.compiler.tf.DeadCodePruner;
 import net.sandius.rembulan.parser.ParseException;
+import net.sandius.rembulan.parser.ParseExceptions;
 import net.sandius.rembulan.parser.Parser;
 import net.sandius.rembulan.parser.TokenMgrError;
+import net.sandius.rembulan.parser.analysis.NameResolutionException;
 import net.sandius.rembulan.parser.analysis.NameResolver;
 import net.sandius.rembulan.parser.ast.Chunk;
 import net.sandius.rembulan.util.ByteVector;
@@ -50,6 +52,8 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * A Lua-to-Java-bytecode compiler.
@@ -86,15 +90,34 @@ public class LuaCompiler {
 		return settings;
 	}
 
-	private static Chunk parse(String sourceText) throws ParseException, TokenMgrError {
+	/** The line in the message of a lexical error (JavaCC's {@code TokenMgrError.LexicalErr}). */
+	private static final Pattern LEXICAL_ERROR_LINE = Pattern.compile("^Lexical error at line (\\d+),");
+
+	private static Chunk parse(String sourceText) throws ParseException {
 		ByteArrayInputStream bais = new ByteArrayInputStream(sourceText.getBytes());
 		Parser parser = new Parser(bais);
-		return parser.Chunk();
+		try {
+			return parser.Chunk();
+		}
+		catch (TokenMgrError ex) {
+			// a lexical error: the token manager keeps its line only in the message
+			String msg = ex.getMessage();
+			Matcher m = LEXICAL_ERROR_LINE.matcher(msg);
+			int line = m.find() ? Integer.parseInt(m.group(1)) : 0;
+			boolean atEndOfInput = msg.contains("Encountered: <EOF>");
+			throw ParseExceptions.at(msg, line, atEndOfInput);
+		}
 	}
 
-	private static Module translate(Chunk chunk) {
-		chunk = NameResolver.resolveNames(chunk);
-		return IRTranslator.translate(chunk);
+	private static Module translate(Chunk chunk) throws ParseException {
+		try {
+			chunk = NameResolver.resolveNames(chunk);
+			return IRTranslator.translate(chunk);
+		}
+		catch (NameResolutionException ex) {
+			// a compile error found after parsing (goto, label, break, varargs)
+			throw ParseExceptions.at(ex.getMessage(), ex.line(), false);
+		}
 	}
 
 	private Iterable<IRFunc> sortTopologically(Module module) {
@@ -204,10 +227,10 @@ public class LuaCompiler {
 	 *
 	 * @throws NullPointerException  if {@code sourceText}, {@code sourceFileName}
 	 *                               or {@code rootClassName} is {@code null}
-	 * @throws TokenMgrError  when {@code sourceText} cannot be lexically analysed following
-	 *                        the Lua lexical rules
-	 * @throws ParseException  when {@code sourceText} cannot be parsed following the Lua
-	 *                         grammar
+	 * @throws TokenMgrError  no longer thrown: lexical errors are parse exceptions
+	 * @throws ParseException  when {@code sourceText} cannot be lexically analysed or parsed
+	 *                         following the Lua rules, or is not a valid chunk (e.g. a goto
+	 *                         without a visible label); its {@code currentToken} gives the line
 	 */
 	public CompiledModule compile(String sourceText, String sourceFileName, String rootClassName)
 			throws ParseException, TokenMgrError {

@@ -18,12 +18,12 @@ package net.sandius.rembulan.compiler;
 
 import net.sandius.rembulan.compiler.ir.*;
 import net.sandius.rembulan.parser.analysis.FunctionVarInfo;
+import net.sandius.rembulan.parser.analysis.NameResolutionException;
 import net.sandius.rembulan.parser.analysis.ResolvedLabel;
 import net.sandius.rembulan.parser.analysis.ResolvedVariable;
 import net.sandius.rembulan.parser.analysis.VarMapping;
 import net.sandius.rembulan.parser.analysis.Variable;
 import net.sandius.rembulan.parser.ast.*;
-import net.sandius.rembulan.parser.ast.util.AttributeUtils;
 
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -1081,7 +1081,7 @@ class IRTranslatorTransformer extends Transformer {
 		insns.atLine(node.line());
 
 		if (breakLabels.isEmpty()) {
-			throw new IllegalStateException("<break> at " + AttributeUtils.sourceInfoString(node) + " not inside a loop");
+			throw new NameResolutionException("<break> at line " + node.line() + " not inside a loop", node.line());
 		}
 		else {
 			Label l = breakLabels.peek();

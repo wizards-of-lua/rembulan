@@ -35,6 +35,7 @@ class FunctionVarInfoBuilder {
 	private final List<Variable> locals;
 	private final List<Variable.Ref> upvals;
 	private boolean varargsUsed;
+	private int firstVarargsLine;
 
 	public FunctionVarInfoBuilder(FunctionVarInfoBuilder parent) {
 		this.parent = parent;
@@ -75,12 +76,29 @@ class FunctionVarInfoBuilder {
 		return v;
 	}
 
-	public void setVararg() {
+	/**
+	 * Records that the function uses {@code ...}, here at the line {@code line}.
+	 *
+	 * @param line  the line of the {@code ...}
+	 */
+	public void setVararg(int line) {
+		if (!varargsUsed) {
+			firstVarargsLine = line;
+		}
 		varargsUsed = true;
 	}
 
 	public boolean isVararg() {
 		return varargsUsed;
+	}
+
+	/**
+	 * Returns the line of the first {@code ...} in the function.
+	 *
+	 * @return  the line of the first {@code ...}, or 0 if the function uses none
+	 */
+	public int firstVarargsLine() {
+		return firstVarargsLine;
 	}
 
 	private Variable findLocal(Name n) {

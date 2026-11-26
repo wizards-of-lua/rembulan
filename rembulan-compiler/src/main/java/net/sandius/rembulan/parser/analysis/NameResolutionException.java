@@ -16,10 +16,35 @@
 
 package net.sandius.rembulan.parser.analysis;
 
+/**
+ * A compile error found after parsing, such as a goto without a visible label.
+ */
 public class NameResolutionException extends RuntimeException {
 
-	public NameResolutionException(String message) {
+	private final int line;
+
+	/**
+	 * Constructs a new exception for an error at the line {@code line}.
+	 *
+	 * @param message  the error message, without source information
+	 * @param line  the line of the error (non-positive if not known)
+	 */
+	public NameResolutionException(String message, int line) {
 		super(message);
+		this.line = line;
+	}
+
+	public NameResolutionException(String message) {
+		this(message, 0);
+	}
+
+	/**
+	 * Returns the line of the error.
+	 *
+	 * @return  the line of the error, or a non-positive number if it is not known
+	 */
+	public int line() {
+		return line;
 	}
 
 }
