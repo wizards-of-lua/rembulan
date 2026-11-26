@@ -862,8 +862,8 @@ public final class StringLib {
 			int init = args.nextOptionalInt(1);
 			boolean plain = args.nextOptionalBoolean(false);
 
-			if (plain) {
-				// find a substring
+			if (plain || noSpecials(patternStr)) {
+				// find a substring (as in PUC-Lua also when the pattern has no special characters)
 				init = lowerBound(init, str.length());
 				int at = indexOf(str, patternStr, init - 1, WorkMeter.forBytes(context));
 				if (at >= 0) {
@@ -905,7 +905,20 @@ public final class StringLib {
 		 * or {@code -1}, as {@link String#indexOf(String, int)}. The meter counts the bytes
 		 * compared: at most the length of {@code p} at each position.
 		 */
-		static int indexOf(ByteString s, ByteString p, int from, WorkMeter meter) {
+		/** PUC-Lua's {@code SPECIALS}: a pattern without these characters is searched as plain text. */
+	private static final String SPECIALS = "^$*+?.([%-";
+
+	/** Whether {@code pattern} has none of the {@link #SPECIALS}, as PUC-Lua's {@code nospecials}. */
+	static boolean noSpecials(ByteString pattern) {
+		for (int i = 0; i < pattern.length(); i++) {
+			if (SPECIALS.indexOf((char) (pattern.byteAt(i) & 0xff)) >= 0) {
+				return false;
+			}
+		}
+		return true;
+	}
+
+	static int indexOf(ByteString s, ByteString p, int from, WorkMeter meter) {
 			// copied once: much faster than byteAt at every position
 			byte[] a = s.getBytes();
 			byte[] b = p.getBytes();

@@ -1148,8 +1148,11 @@ public class StringPattern {
     }
 
     private CC_lit CC_lit(char c) {
-      if (isMagic(c)) {
-        throw parseError(index, "unexpected character '" + c + "'");
+      // As in PUC-Lua, a magic character where it has no special meaning is an ordinary one: '$'
+      // not at the end, '^' not at the start, a quantifier with nothing before it, a lone ']'.
+      // Only a ')' without its '(' is an error.
+      if (c == ')') {
+        throw parseError(index, "invalid pattern capture");
       }
       return new CC_lit(c);
     }

@@ -123,9 +123,10 @@ public class LibraryWorkTicksTest extends TestBase {
   public void test_each_call_is_charged_on_its_own() throws Exception {
     // two calls of 30,000 ticks each in one piece of compiled code (no branch between them, so no
     // ordinary registerTicks): each call starts its count anew, so neither exceeds 50,000; each
-    // also charges 1500 ticks for making a raw string of its subject
+    // also charges 1500 ticks for making a raw string of its subject ('[b]' is a pattern; 'b'
+    // would be searched as plain text)
     Scheduler scheduler = new Scheduler(50000);
-    Object[] actual = run(scheduler, "local s = ... local a = s:find('b') local b = s:find('b') return a, b",
+    Object[] actual = run(scheduler, "local s = ... local a = s:find('[b]') local b = s:find('[b]') return a, b",
         300000);
     assertThat(actual).isEqualTo(new Object[] {null, null});
     assertThat(scheduler.unpausableTicks).isBetween(62900L, 63000L);
@@ -153,7 +154,8 @@ public class LibraryWorkTicksTest extends TestBase {
   public void test_long_find_charges_its_steps() throws Exception {
     Scheduler scheduler = new Scheduler(Long.MAX_VALUE);
     // 100,000 start positions of 2 steps each, 20 steps per tick; 500 ticks for the raw string
-    Object[] actual = run(scheduler, "return string.find(..., 'b')", 100000);
+    // (a pattern with a special character: one without is searched as plain text)
+    Object[] actual = run(scheduler, "return string.find(..., '[b]')", 100000);
     assertThat(actual).isEqualTo(new Object[] {null});
     assertThat(scheduler.unpausableTicks).isBetween(10450L, 10500L);
   }
