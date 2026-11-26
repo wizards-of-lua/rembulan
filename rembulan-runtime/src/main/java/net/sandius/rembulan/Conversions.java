@@ -571,6 +571,10 @@ public final class Conversions {
 		if (t instanceof LuaRuntimeException) {
 			return ((LuaRuntimeException) t).getErrorObject();
 		}
+		else if (t instanceof StackOverflowError) {
+			// as in PUC-Lua: endless recursion is a Lua error
+			return "stack overflow";
+		}
 		else {
 			return t.getMessage();
 		}

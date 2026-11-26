@@ -1305,7 +1305,7 @@ public final class BasicLib {
 			catch (UnresolvedControlThrowable ct) {
 				throw ct.resolve(this, null);
 			}
-			catch (Exception ex) {
+			catch (Exception | StackOverflowError ex) {
 				resumeError(context, null, Conversions.toErrorObject(ex));
 				return;
 			}
@@ -1377,7 +1377,7 @@ public final class BasicLib {
 				catch (UnresolvedControlThrowable ct) {
 					throw ct.resolve(this, new SavedState(handler, depth));
 				}
-				catch (Exception e) {
+				catch (Exception | StackOverflowError e) {
 					errorObject = Conversions.toErrorObject(e);
 					isError = true;
 				}
@@ -1408,7 +1408,7 @@ public final class BasicLib {
 			catch (UnresolvedControlThrowable ct) {
 				throw ct.resolve(this, new SavedState(handler, 0));
 			}
-			catch (Exception e) {
+			catch (Exception | StackOverflowError e) {
 				errorObject = Conversions.toErrorObject(e);
 				isError = true;
 			}

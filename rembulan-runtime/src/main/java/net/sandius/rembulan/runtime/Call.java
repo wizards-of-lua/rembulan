@@ -528,6 +528,10 @@ class Call {
 					// unhandled exception: will try finding a handler in the next iteration
 					error = ex;
 				}
+				catch (StackOverflowError ex) {
+					// endless recursion: a Lua error, which a handler may catch as well
+					error = Errors.stackOverflow();
+				}
 			}
 
 			assert (callStack == null);

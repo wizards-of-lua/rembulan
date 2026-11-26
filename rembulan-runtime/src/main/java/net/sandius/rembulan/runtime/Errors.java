@@ -16,6 +16,8 @@
 
 package net.sandius.rembulan.runtime;
 
+import net.sandius.rembulan.LuaRuntimeException;
+
 import net.sandius.rembulan.ByteString;
 import net.sandius.rembulan.Conversions;
 import net.sandius.rembulan.NoIntegerRepresentationException;
@@ -26,6 +28,18 @@ final class Errors {
 
 	private Errors() {
 		// not to be instantiated
+	}
+
+	/**
+	 * The Lua error of a {@link StackOverflowError}: endless recursion, as PUC-Lua's
+	 * "stack overflow".
+	 */
+	static LuaRuntimeException stackOverflow() {
+		return new LuaRuntimeException("stack overflow");
+	}
+
+	static LuaRuntimeException chainTooLong(String event) {
+		return new LuaRuntimeException("'" + event + "' chain too long; possible loop");
 	}
 
 	static NoIntegerRepresentationException noIntegerRepresentation() {

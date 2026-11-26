@@ -1426,44 +1426,49 @@ public final class Dispatch {
 	 */
 	@SuppressWarnings("unused")
 	public static void index(ExecutionContext context, Object table, Object key) throws UnresolvedControlThrowable {
-		if (table instanceof Table) {
-			Table t = (Table) table;
-			Object value = t.rawget(key);
+		for (int loop = 0; loop < MAX_TAG_LOOP; loop++) {
+			if (table instanceof Table) {
+				Table t = (Table) table;
+				Object value = t.rawget(key);
 
-			if (value != null) {
-				context.getReturnBuffer().setTo(value);
+				if (value != null) {
+					context.getReturnBuffer().setTo(value);
+					return;
+				}
+				// else fall through and check the __index a metamethod
+			}
+
+			Object handler = Metatables.getMetamethod(context, Metatables.MT_INDEX, table);
+
+			if (handler == null && table instanceof Table) {
+				// key not found and no index metamethod, returning nil
+				context.getReturnBuffer().setTo(null);
 				return;
 			}
-			// else fall through and check the __index a metamethod
-		}
+			if (handler instanceof LuaFunction) {
+				// call the handler
+				LuaFunction fn = (LuaFunction) handler;
 
-		Object handler = Metatables.getMetamethod(context, Metatables.MT_INDEX, table);
-
-		if (handler == null && table instanceof Table) {
-			// key not found and no index metamethod, returning nil
-			context.getReturnBuffer().setTo(null);
-			return;
-		}
-		if (handler instanceof LuaFunction) {
-			// call the handler
-			LuaFunction fn = (LuaFunction) handler;
-
-			try {
-				fn.invoke(context, table, key);
-				evaluateTailCalls(context);
+				try {
+					fn.invoke(context, table, key);
+					evaluateTailCalls(context);
+				}
+				catch (ResolvedControlThrowable ct) {
+					throw ct.unresolve();
+				}
+				return;
 			}
-			catch (ResolvedControlThrowable ct) {
-				throw ct.unresolve();
+			else if (handler instanceof Table) {
+				// repeat with the handler, at most MAX_TAG_LOOP times
+				table = handler;
+			}
+			else {
+				throw Errors.illegalIndexAttempt(table, key);
 			}
 		}
-		else if (handler instanceof Table) {
-			// TODO: protect against infinite loops
-			index(context, handler, key);
-		}
-		else {
-			throw Errors.illegalIndexAttempt(table, key);
-		}
+		throw Errors.chainTooLong("__index");
 	}
+
 
 	/**
 	 * Evaluates the Lua expression {@code table[key]} (in non-assignment context) including
@@ -1536,44 +1541,49 @@ public final class Dispatch {
 	 */
 	@SuppressWarnings("unused")
 	public static void setindex(ExecutionContext context, Object table, Object key, Object value) throws UnresolvedControlThrowable {
-		if (table instanceof Table) {
-			Table t = (Table) table;
-			Object r = t.rawget(key);
+		for (int loop = 0; loop < MAX_TAG_LOOP; loop++) {
+			if (table instanceof Table) {
+				Table t = (Table) table;
+				Object r = t.rawget(key);
 
-			if (r != null) {
+				if (r != null) {
+					t.rawset(key, value);
+					return;
+				}
+			}
+
+			Object handler = Metatables.getMetamethod(context, Metatables.MT_NEWINDEX, table);
+
+			if (handler == null && table instanceof Table) {
+				Table t = (Table) table;
 				t.rawset(key, value);
 				return;
 			}
-		}
 
-		Object handler = Metatables.getMetamethod(context, Metatables.MT_NEWINDEX, table);
+			if (handler instanceof LuaFunction) {
+				// call the handler
+				LuaFunction fn = (LuaFunction) handler;
 
-		if (handler == null && table instanceof Table) {
-			Table t = (Table) table;
-			t.rawset(key, value);
-			return;
-		}
-
-		if (handler instanceof LuaFunction) {
-			// call the handler
-			LuaFunction fn = (LuaFunction) handler;
-
-			try {
-				fn.invoke(context, table, key, value);
-				evaluateTailCalls(context);
+				try {
+					fn.invoke(context, table, key, value);
+					evaluateTailCalls(context);
+				}
+				catch (ResolvedControlThrowable ct) {
+					throw ct.unresolve();
+				}
+				return;
 			}
-			catch (ResolvedControlThrowable ct) {
-				throw ct.unresolve();
+			else if (handler instanceof Table) {
+				// repeat with the handler, at most MAX_TAG_LOOP times
+				table = handler;
+			}
+			else {
+				throw Errors.illegalIndexAttempt(table, key);
 			}
 		}
-		else if (handler instanceof Table) {
-			// TODO: protect against infinite loops
-			setindex(context, handler, key, value);
-		}
-		else {
-			throw Errors.illegalIndexAttempt(table, key);
-		}
+		throw Errors.chainTooLong("__newindex");
 	}
+
 
 	/**
 	 * Executes the Lua statement {@code table[key] = value}, including the handling of
@@ -1626,6 +1636,12 @@ public final class Dispatch {
 	}
 
 	private static final Long ZERO = Long.valueOf(0L);
+
+	/**
+	 * How many {@code __index} or {@code __newindex} tables a lookup or an assignment follows
+	 * before it fails with "chain too long; possible loop": 2000, PUC-Lua's {@code MAXTAGLOOP}.
+	 */
+	static final int MAX_TAG_LOOP = 2000;
 
 	/**
 	 * Returns {@code true} iff {@code a} <i>op</i> {@code b}, where <i>op</i> is
