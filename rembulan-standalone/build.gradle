@@ -14,6 +14,6 @@ dependencies {
   implementation project(':rembulan-runtime')
   implementation project(':rembulan-compiler')
   implementation project(':rembulan-stdlib')
-  implementation 'jline:jline:2.14.2'
+  implementation 'jline:jline:2.14.6'
 }
 
