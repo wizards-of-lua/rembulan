@@ -70,6 +70,22 @@ TOKEN_MGR_DECLS: {
 
 	int longLiteralLevel;
 
+	/**
+	 * Called after a closing long bracket of another level than the opening one: the long string
+	 * or comment goes on, so if the input ends here, it is unfinished, a lexical error as when the
+	 * input ends anywhere else in it.
+	 */
+	void checkNotAtEndOfInput() {
+		try {
+			input_stream.readChar();
+			input_stream.backup(1);
+		}
+		catch (java.io.IOException ex) {
+			throw new TokenMgrError(true, curLexState, input_stream.getEndLine(), input_stream.getEndColumn(),
+					"", 0, TokenMgrError.LEXICAL_ERROR);
+		}
+	}
+
 }
 
 /* Whitespace */
@@ -111,6 +127,9 @@ TOKEN :
 			if (longLiteralLevel == lengthOfMatch - 1) {
 				longLiteralLevel = -1;
 				SwitchTo(DEFAULT);
+			}
+			else {
+				checkNotAtEndOfInput();
 			}
 		}
 }
@@ -161,6 +180,9 @@ SPECIAL_TOKEN :
 			if (longLiteralLevel == lengthOfMatch - 1) {
 				longLiteralLevel = -1;
 				SwitchTo(DEFAULT);
+			}
+			else {
+				checkNotAtEndOfInput();
 			}
 		}
 }
