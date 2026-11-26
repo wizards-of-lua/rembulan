@@ -24,12 +24,6 @@ import java.io.BufferedInputStream;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.nio.ByteBuffer;
-import java.nio.CharBuffer;
-import java.nio.charset.CharacterCodingException;
-import java.nio.charset.CharsetEncoder;
-import java.nio.charset.CodingErrorAction;
-import java.nio.charset.StandardCharsets;
 import java.util.Objects;
 
 public class StringLiteral extends Literal {
@@ -58,18 +52,26 @@ public class StringLiteral extends Literal {
 		return c <= 0xff && Character.isWhitespace(c);
 	}
 
-	private static void appendBytes(ByteStringBuilder builder, CharsetEncoder encoder, int codePoint) {
-		final ByteBuffer bytes;
-		try {
-			bytes = encoder.encode(CharBuffer.wrap(Character.toChars(codePoint)));
+	/**
+	 * Appends the UTF-8 sequence of {@code x} (0 to 0x10FFFF) as PUC-Lua 5.3's {@code luaO_utf8esc}
+	 * makes it: surrogates, which aren't Unicode characters, are encoded as they are.
+	 */
+	private static void appendUtf8Escape(ByteStringBuilder builder, int x) {
+		if (x < 0x80) {
+			builder.append((byte) x);
+			return;
 		}
-		catch (CharacterCodingException ex) {
-			// should not happen
-			throw new IllegalStateException(ex);
-		}
-
-		while (bytes.hasRemaining()) {
-			builder.append(bytes.get());
+		byte[] buf = new byte[6];
+		int n = 0;  // continuation bytes, from the last one backwards
+		int mfb = 0x3f;  // the maximum that fits into the first byte
+		do {
+			buf[5 - n++] = (byte) (0x80 | (x & 0x3f));
+			x >>>= 6;
+			mfb >>= 1;
+		} while (x > mfb);
+		buf[5 - n] = (byte) ((~mfb << 1) | x);
+		for (int i = 5 - n; i < 6; i++) {
+			builder.append(buf[i]);
 		}
 	}
 
@@ -77,11 +79,6 @@ public class StringLiteral extends Literal {
 		Objects.requireNonNull(in);
 		// a BufferedInputStream allocates 8 KB, which adds up for large chunks with many literals
 		InputStream stream = in.markSupported() ? in : new BufferedInputStream(in);
-
-		// encoder for UTF-8 byte sequences
-		CharsetEncoder utf8Encoder = StandardCharsets.UTF_8.newEncoder()
-				.onMalformedInput(CodingErrorAction.REPLACE)
-				.onUnmappableCharacter(CodingErrorAction.REPLACE);
 
 		ByteStringBuilder bld = new ByteStringBuilder();
 
@@ -187,16 +184,16 @@ public class StringLiteral extends Literal {
 								throw new IllegalArgumentException("hexadecimal digit expected at index " + (pos - 1));
 							}
 							else {
+								// as in PUC-Lua 5.3: values up to 0x10FFFF (5.4 allows up to 0x7FFFFFFF)
 								value = (value << 4) + digit;
-
-								if (value >= Character.MAX_CODE_POINT) {
-			                        throw new IllegalArgumentException("UTF-8 value too large at index " + (pos - 1));
+								if (value > 0x10FFFF) {
+									throw new IllegalArgumentException("UTF-8 value too large at index " + (pos - 1));
 								}
 							}
 						}
 					} while (c != '}');
 
-					appendBytes(bld, utf8Encoder, value);
+					appendUtf8Escape(bld, value);
 				}
 				else if (c == 'z') {
 					// skip subsequent whitespace
